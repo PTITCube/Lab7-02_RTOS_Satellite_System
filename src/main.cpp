@@ -25,6 +25,7 @@ PTIT_COM lora;
 PTIT_EPS eps;
 PTIT_Storage storage;
 PTIT_CDH cdh;
+PTIT_Camera camera;
 
 PTIT_Scheduler scheduler;
 
@@ -53,7 +54,11 @@ void sensorLoop() {
 // GPS: Feed dữ liệu NMEA từ UART2
 void gpsLoop() {
     if (isTelemetryPaused) return;
-    gps.update();
+    if (PTIT_Scheduler::lock(PTIT_BUS_UART2, 100)) {
+        camera.selectGPS();
+        gps.update();
+        PTIT_Scheduler::unlock(PTIT_BUS_UART2);
+    }
 }
 
 // COM: Nhận và xử lý lệnh từ trạm mặt đất qua LoRa
@@ -86,6 +91,12 @@ String processSystemCommand(String command) {
         PTIT_Scheduler::unlock(PTIT_BUS_SPI);
         return res;
     }
+    if (command == "capture") {
+        if (!PTIT_Scheduler::lock(PTIT_BUS_UART2, 10000)) return "ERR: UART2 busy";
+        bool success = camera.capture();
+        PTIT_Scheduler::unlock(PTIT_BUS_UART2);
+        return success ? "Photo captured!" : "ERR: Capture failed";
+    }
     if (command == "status") {
         return "STATUS: Up " + String(millis() / 1000) + "s, Bat=" + String(eps.getBatteryVoltage(), 1) + 
                "V, SD=" + (storage.isReady() ? "OK" : "ERR") + (isTelemetryPaused ? " (PAUSED)" : " (ACTIVE)");
@@ -103,7 +114,7 @@ String processSystemCommand(String command) {
         return "Telemetry RESUMED. Realtime data active.";
     }
     if (command == "help") {
-        return "ping|reboot|uptime|get_gps|get_sensor|get_eps|status|clear_log|pause|resume|pwd|cd|ls|mkdir|rmdir|rm|touch|help";
+        return "ping|reboot|uptime|get_gps|get_sensor|get_eps|status|clear_log|capture|pause|resume|pwd|cd|ls|mkdir|rmdir|rm|touch|help";
     }
     return "";
 }
@@ -225,6 +236,7 @@ void setup() {
     eps.init();
     storage.init();
     cdh.init();
+    camera.init(12, 14);
 
     // Cấu hình LoRa
     lora.setChannel(23);
