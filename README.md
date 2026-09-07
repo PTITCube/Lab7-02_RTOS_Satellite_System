@@ -1,4 +1,4 @@
-# Lab7-02_Full_Satellite_Program
+# Lab7-03_RTOS_Satellite_System
 
 **Chương trình Vệ tinh toàn diện**
 
