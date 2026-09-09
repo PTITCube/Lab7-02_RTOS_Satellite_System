@@ -1,5 +1,13 @@
 #include "Camera.h"
-#include <SD_MMC.h>
+#include <SD.h>
+#include <SPI.h>
+
+namespace {
+constexpr uint8_t SD_CS_PIN = 13;
+constexpr uint8_t SD_SCK_PIN = 18;
+constexpr uint8_t SD_MISO_PIN = 19;
+constexpr uint8_t SD_MOSI_PIN = 23;
+}
 
 PTIT_Camera::PTIT_Camera() : gpsSelectPin(12), camSelectPin(14), sdReady(false) {
 }
@@ -8,8 +16,9 @@ bool PTIT_Camera::initializeSd() {
     // Nếu thẻ nhớ đã khởi tạo thành công trước đó, không cần khởi tạo lại
     if (sdReady) return true;
     
-    // Đảm bảo chân CS của mạch không xung đột (nếu dùng chung SPI, tuy nhiên SD_MMC dùng các chân cố định)
-    if (!SD_MMC.begin("/sdcard", true)) {
+    Serial.println("[Camera] Khoi tao MicroSD qua SPI...");
+    SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
+    if (!SD.begin(SD_CS_PIN, SPI, 8000000)) {
         Serial.println("[Camera] MicroSD mount failed");
         sdReady = false;
         return false;
@@ -71,18 +80,18 @@ bool PTIT_Camera::captureToFile(const char* path) {
 
     // Đảm bảo kênh MUX đang trỏ vào Camera và cổng Serial2 đang mở ở baudrate 115200
     selectCamera();
-    delay(100);
 
     // Dọn dẹp bộ nhớ đệm
     while(Serial2.available()) Serial2.read();
 
     // 1. Gửi lệnh CAPTURE
     Serial.println("[Camera] Đang gửi lệnh chụp ảnh tới ESP32-CAM...");
-    Serial2.println("CAPTURE");
+    Serial2.print("CAPTURE\n");
+    Serial2.flush();
 
     // 2. Chờ ESP32-CAM phản hồi về SIZE
     String response = "";
-    long startTime = millis();
+    unsigned long startTime = millis();
     bool sizeReceived = false;
     long imageSize = 0;
 
@@ -95,8 +104,12 @@ bool PTIT_Camera::captureToFile(const char* path) {
                 sizeReceived = true;
                 break;
             }
+            if (response.startsWith("ERROR:")) {
+                Serial.println("[Camera] ESP32-CAM: " + response);
+                return false;
+            }
         }
-        delay(10);
+        delay(1);
     }
 
     if (!sizeReceived || imageSize <= 0) {
@@ -111,8 +124,8 @@ bool PTIT_Camera::captureToFile(const char* path) {
     int lastSlash = filePath.lastIndexOf('/');
     if (lastSlash > 0) {
         String dirPath = filePath.substring(0, lastSlash);
-        if (!SD_MMC.exists(dirPath.c_str())) {
-            if (!SD_MMC.mkdir(dirPath.c_str())) {
+        if (!SD.exists(dirPath.c_str())) {
+            if (!SD.mkdir(dirPath.c_str())) {
                 Serial.println("[Camera] Lỗi: Không thể tạo thư mục " + dirPath);
                 return false;
             }
@@ -120,14 +133,15 @@ bool PTIT_Camera::captureToFile(const char* path) {
     }
 
     // 4. Mở file để ghi
-    File file = SD_MMC.open(path, FILE_WRITE);
+    File file = SD.open(path, FILE_WRITE);
     if (!file) {
         Serial.println("[Camera] Lỗi: Không thể tạo file " + String(path));
         return false;
     }
 
     // 5. Báo cho ESP32-CAM biết OBC đã sẵn sàng nhận dữ liệu
-    Serial2.println("OK");
+    Serial2.print("OK\n");
+    Serial2.flush();
     Serial.println("[Camera] Đang tải dữ liệu ảnh từ ESP32-CAM...");
 
     // 6. Nhận dữ liệu raw từ UART và ghi trực tiếp vào thẻ nhớ
