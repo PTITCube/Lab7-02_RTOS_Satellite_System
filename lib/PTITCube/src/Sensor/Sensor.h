@@ -7,7 +7,7 @@
 
 class PTIT_Sensor {
 public:
-    void init();
+    void init(bool initBMP = true, bool initMPU = true, bool initQMC = true);
     void update();
     float getTemperature();
     float getPressure();
