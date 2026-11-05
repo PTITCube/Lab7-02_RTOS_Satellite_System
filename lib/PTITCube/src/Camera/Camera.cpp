@@ -7,6 +7,11 @@ constexpr uint8_t SD_CS_PIN = 13;
 constexpr uint8_t SD_SCK_PIN = 18;
 constexpr uint8_t SD_MISO_PIN = 19;
 constexpr uint8_t SD_MOSI_PIN = 23;
+
+// Baudrate giao tiếp với ESP32-CAM (UART2 của CAM ở 115200)
+constexpr uint32_t CAM_BAUD = 115200;
+// Baudrate giao tiếp với GPS (9600)
+constexpr uint32_t GPS_BAUD = 9600;
 }
 
 PTIT_Camera::PTIT_Camera() : gpsSelectPin(12), camSelectPin(14), sdReady(false) {
@@ -36,31 +41,41 @@ bool PTIT_Camera::init(uint8_t gpsSelectPin, uint8_t camSelectPin) {
     if (gpsSelectPin != 255 && camSelectPin != 255) {
         pinMode(this->gpsSelectPin, OUTPUT);
         pinMode(this->camSelectPin, OUTPUT);
+        
+        // Nguyên tắc Break-Before-Make: Tắt cả hai kênh trước
+        digitalWrite(this->camSelectPin, LOW);
         digitalWrite(this->gpsSelectPin, LOW);
-        digitalWrite(this->camSelectPin, HIGH); // Mặc định mở kênh Camera
+        delayMicroseconds(50);
+        
+        // Mặc định an toàn: Trả quyền ưu tiên bus UART2 cho GPS
+        digitalWrite(this->gpsSelectPin, HIGH);
     }
 
-    Serial.println("[Camera] Khởi tạo giao tiếp Master-Slave với ESP32-CAM (UART2)...");
-    Serial2.begin(115200, SERIAL_8N1, 16, 17); // Mở cổng Serial2 để giao tiếp với ESP32-CAM
+    // Mặc định khởi động cổng UART2 ở baudrate GPS (9600)
+    Serial2.begin(GPS_BAUD, SERIAL_8N1, 16, 17);
 
     return initializeSd();
 }
 
 void PTIT_Camera::selectGPS() {
     if (gpsSelectPin != 255 && camSelectPin != 255) {
-        digitalWrite(gpsSelectPin, HIGH);
+        // Break-Before-Make: TẮT Camera trước
         digitalWrite(camSelectPin, LOW);
-        // Trả lại cấu hình UART cho GPS
-        Serial2.begin(9600, SERIAL_8N1, 16, 17);
+        delayMicroseconds(50);
+        // BẬT GPS sau (chống chập 2 chân TX trên 74HC4066)
+        digitalWrite(gpsSelectPin, HIGH);
+        Serial2.begin(GPS_BAUD, SERIAL_8N1, 16, 17);
     }
 }
 
 void PTIT_Camera::selectCamera() {
     if (gpsSelectPin != 255 && camSelectPin != 255) {
+        // Break-Before-Make: TẮT GPS trước
         digitalWrite(gpsSelectPin, LOW);
+        delayMicroseconds(50);
+        // BẬT Camera sau
         digitalWrite(camSelectPin, HIGH);
-        // Đặt lại cấu hình UART cho Camera
-        Serial2.begin(115200, SERIAL_8N1, 16, 17);
+        Serial2.begin(CAM_BAUD, SERIAL_8N1, 16, 17);
     }
 }
 
@@ -74,18 +89,18 @@ bool PTIT_Camera::capture() {
 
 bool PTIT_Camera::captureToFile(const char* path) {
     if (!sdReady) {
-        Serial.println("[Camera] Lỗi: Thẻ nhớ SD chưa sẵn sàng.");
+        Serial.println("[Camera] Loi: The nho SD chua san sang.");
         return false;
     }
 
-    // Đảm bảo kênh MUX đang trỏ vào Camera và cổng Serial2 đang mở ở baudrate 115200
+    // Đảm bảo kênh MUX đang trỏ vào Camera và cổng Serial2 chuyển sang 115200
     selectCamera();
 
-    // Dọn dẹp bộ nhớ đệm
+    // Dọn dẹp bộ nhớ đệm UART2
     while(Serial2.available()) Serial2.read();
 
-    // 1. Gửi lệnh CAPTURE
-    Serial.println("[Camera] Đang gửi lệnh chụp ảnh tới ESP32-CAM...");
+    // 1. Gửi lệnh CAPTURE đến ESP32-CAM qua UART2
+    Serial.println("[Camera] Dang gui lenh chup anh toi ESP32-CAM...");
     Serial2.print("CAPTURE\n");
     Serial2.flush();
 
@@ -106,6 +121,7 @@ bool PTIT_Camera::captureToFile(const char* path) {
             }
             if (response.startsWith("ERROR:")) {
                 Serial.println("[Camera] ESP32-CAM: " + response);
+                selectGPS(); // Trả lại kênh cho GPS khi có lỗi
                 return false;
             }
         }
@@ -113,11 +129,12 @@ bool PTIT_Camera::captureToFile(const char* path) {
     }
 
     if (!sizeReceived || imageSize <= 0) {
-        Serial.println("[Camera] Lỗi: Không nhận được phản hồi kích thước từ ESP32-CAM.");
+        Serial.println("[Camera] Loi: Khong nhan duoc phan hoi kich thuoc tu ESP32-CAM.");
+        selectGPS(); // Trả lại kênh cho GPS khi timeout
         return false;
     }
 
-    Serial.printf("[Camera] ESP32-CAM phản hồi kích thước ảnh: %ld bytes\n", imageSize);
+    Serial.printf("[Camera] ESP32-CAM phan hoi kich thuoc anh: %ld bytes\n", imageSize);
 
     // 3. Tạo thư mục nếu chưa có
     String filePath = path;
@@ -126,7 +143,8 @@ bool PTIT_Camera::captureToFile(const char* path) {
         String dirPath = filePath.substring(0, lastSlash);
         if (!SD.exists(dirPath.c_str())) {
             if (!SD.mkdir(dirPath.c_str())) {
-                Serial.println("[Camera] Lỗi: Không thể tạo thư mục " + dirPath);
+                Serial.println("[Camera] Loi: Khong the tao thu muc " + dirPath);
+                selectGPS();
                 return false;
             }
         }
@@ -135,16 +153,17 @@ bool PTIT_Camera::captureToFile(const char* path) {
     // 4. Mở file để ghi
     File file = SD.open(path, FILE_WRITE);
     if (!file) {
-        Serial.println("[Camera] Lỗi: Không thể tạo file " + String(path));
+        Serial.println("[Camera] Loi: Khong the tao file " + String(path));
+        selectGPS();
         return false;
     }
 
     // 5. Báo cho ESP32-CAM biết OBC đã sẵn sàng nhận dữ liệu
     Serial2.print("OK\n");
     Serial2.flush();
-    Serial.println("[Camera] Đang tải dữ liệu ảnh từ ESP32-CAM...");
+    Serial.println("[Camera] Dang tai du lieu anh tu ESP32-CAM...");
 
-    // 6. Nhận dữ liệu raw từ UART và ghi trực tiếp vào thẻ nhớ
+    // 6. Nhận dữ liệu raw từ UART2 và ghi trực tiếp vào thẻ nhớ
     long receivedBytes = 0;
     startTime = millis();
     uint8_t buf[256];
@@ -152,7 +171,7 @@ bool PTIT_Camera::captureToFile(const char* path) {
     while (receivedBytes < imageSize && (millis() - startTime < 15000)) {
         if (Serial2.available()) {
             int bytesToRead = Serial2.available();
-            if (bytesToRead > sizeof(buf)) bytesToRead = sizeof(buf);
+            if (bytesToRead > (int)sizeof(buf)) bytesToRead = sizeof(buf);
             
             int bytesRead = Serial2.readBytes(buf, bytesToRead);
             file.write(buf, bytesRead);
@@ -165,13 +184,19 @@ bool PTIT_Camera::captureToFile(const char* path) {
 
     file.close();
 
-    // 7. Hoàn tất
+    // 7. Hoàn tất và TRẢ LẠI KÊNH CHO GPS
+    bool success = false;
     if (receivedBytes == imageSize) {
-        Serial.println("[Camera] Lưu ảnh thành công: " + String(path));
+        Serial.println("[Camera] Luu anh thanh cong: " + String(path));
         Serial2.println("DONE"); // Báo ESP32-CAM kết thúc
-        return true;
+        success = true;
     } else {
-        Serial.printf("[Camera] Lỗi: Chỉ nhận được %ld/%ld bytes. Timeout!\n", receivedBytes, imageSize);
-        return false;
+        Serial.printf("[Camera] Loi: Chi nhan duoc %ld/%ld bytes. Timeout!\n", receivedBytes, imageSize);
+        success = false;
     }
+
+    // Luôn luôn trả lại đường truyền UART2 cho GPS sau khi chụp xong
+    selectGPS();
+
+    return success;
 }

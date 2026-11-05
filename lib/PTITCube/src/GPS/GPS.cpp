@@ -1,40 +1,47 @@
 #include "GPS.h"
 
-PTIT_GPS::PTIT_GPS() : gpsSerial(2), gpsSelectPin(12), camSelectPin(14), selectedDevice(Uart2Device::GPS) {
+PTIT_GPS::PTIT_GPS() : gpsSerial(2), gpsSelectPin(12), camSelectPin(14) {
 }
 
 void PTIT_GPS::init(uint8_t gpsSelectPin, uint8_t camSelectPin) {
     this->gpsSelectPin = gpsSelectPin;
     this->camSelectPin = camSelectPin;
 
-    pinMode(this->gpsSelectPin, OUTPUT);
-    pinMode(this->camSelectPin, OUTPUT);
+    if (this->gpsSelectPin != 255 && this->camSelectPin != 255) {
+        pinMode(this->gpsSelectPin, OUTPUT);
+        pinMode(this->camSelectPin, OUTPUT);
 
-    digitalWrite(this->gpsSelectPin, HIGH);
-    digitalWrite(this->camSelectPin, LOW);
-    selectedDevice = Uart2Device::GPS;
+        // Break-Before-Make: Tắt CAM trước, ngắt hoàn toàn tiếp điểm 74HC4066
+        digitalWrite(this->camSelectPin, LOW);
+        delayMicroseconds(50);
+        digitalWrite(this->gpsSelectPin, HIGH);
+    }
 
-    Serial.println("[GPS] Initializing GPS NEO (UART2)...");
-    gpsSerial.begin(9600, SERIAL_8N1, 16, 17); // RX2=16, TX2=17
+    Serial.println("[GPS] Initializing GPS NEO (UART2, RX=16, TX=17)...");
+    gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
 }
 
 void PTIT_GPS::selectGPS() {
-    digitalWrite(gpsSelectPin, HIGH);
-    digitalWrite(camSelectPin, LOW);
-    selectedDevice = Uart2Device::GPS;
+    if (gpsSelectPin != 255 && camSelectPin != 255) {
+        // Break-Before-Make: TẮT CAM trước
+        digitalWrite(camSelectPin, LOW);
+        delayMicroseconds(50);
+        // BẬT GPS sau
+        digitalWrite(gpsSelectPin, HIGH);
+        // Đặt lại baudrate GPS (9600)
+        gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
+    }
 }
 
 void PTIT_GPS::selectCamera() {
-    digitalWrite(gpsSelectPin, LOW);
-    digitalWrite(camSelectPin, HIGH);
-    selectedDevice = Uart2Device::CAMERA;
-}
-
-void PTIT_GPS::selectDevice(Uart2Device device) {
-    if (device == Uart2Device::GPS) {
-        selectGPS();
-    } else {
-        selectCamera();
+    if (gpsSelectPin != 255 && camSelectPin != 255) {
+        // Break-Before-Make: TẮT GPS trước
+        digitalWrite(gpsSelectPin, LOW);
+        delayMicroseconds(50);
+        // BẬT CAM sau
+        digitalWrite(camSelectPin, HIGH);
+        // Đặt lại baudrate Camera (115200)
+        gpsSerial.begin(115200, SERIAL_8N1, 16, 17);
     }
 }
 
@@ -44,15 +51,22 @@ void PTIT_GPS::update() {
     }
 }
 
-float PTIT_GPS::getLat() {
+bool PTIT_GPS::hasFix() {
+    return gps.location.isValid();
+}
+
+float PTIT_GPS::getLatitude() {
     if (gps.location.isValid()) return gps.location.lat();
     return 0.0;
 }
 
-float PTIT_GPS::getLng() {
+float PTIT_GPS::getLongitude() {
     if (gps.location.isValid()) return gps.location.lng();
     return 0.0;
 }
+
+float PTIT_GPS::getLat() { return getLatitude(); }
+float PTIT_GPS::getLng() { return getLongitude(); }
 
 float PTIT_GPS::getAltitude() {
     if (gps.altitude.isValid()) return gps.altitude.meters();

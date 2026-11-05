@@ -3,6 +3,16 @@
 
 #include <Arduino.h>
 
+/**
+ * @brief Lớp điều khiển module ESP32-CAM từ ESP32 chính (OBC).
+ * 
+ * ESP32-CAM giao tiếp qua UART2 (GPIO 14 TX / GPIO 15 RX).
+ * ESP32 chính kết nối với ESP32-CAM qua UART2 (GPIO 16 RX / GPIO 17 TX),
+ * chia sẻ đường UART2 với GPS qua Multiplexer (MUX).
+ * 
+ * Khi MUX chọn Camera: OBC UART2 <-> CAM UART2
+ * Khi MUX chọn GPS:    OBC UART2 <-> GPS UART
+ */
 class PTIT_Camera {
 public:
     PTIT_Camera();
