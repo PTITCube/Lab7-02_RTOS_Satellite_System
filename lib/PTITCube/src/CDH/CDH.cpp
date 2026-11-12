@@ -3,9 +3,6 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 
-// Đối tượng cdh toàn cục mặc định liên kết với cổng Serial chính của OBC (UART0)
-PTIT_CDH __attribute__((weak)) cdh(Serial);
-
 // Global instances for WiFi & MQTT to simplify ISRs / Callbacks if any
 static WiFiClientSecure espClient;
 static PubSubClient mqttClient(espClient);

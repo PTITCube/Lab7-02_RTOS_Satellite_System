@@ -43,7 +43,4 @@ public:
     using Print::write;
 };
 
-// Đối tượng cdh toàn cục được khởi tạo sẵn trong thư viện để ẩn Serial
-extern PTIT_CDH cdh;
-
 #endif
