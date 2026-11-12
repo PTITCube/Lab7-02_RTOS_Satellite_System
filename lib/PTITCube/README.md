@@ -10,7 +10,7 @@ Thư viện được chia thành các module (subsystems) chính:
 - **CDH (Command and Data Handling):** Khối xử lý lệnh trung tâm, tự động kết nối WiFi và phát dữ liệu Telemetry chuẩn MQTT.
 - **COM (Communication):** Khối giao tiếp vô tuyến LoRa E32, hỗ trợ truyền/nhận lệnh điều khiển ở khoảng cách xa với cơ chế chống nghẽn và cắt nhỏ gói tin (Chunking) thông minh.
 - **EPS (Electrical Power System):** Khối quản lý năng lượng, giám sát điện áp và dung lượng pin.
-- **Sensor:** Khối thu thập dữ liệu đa chiều từ các cảm biến: nhiệt độ, áp suất (BMP280), gia tốc, con quay hồi chuyển (MPU6050), la bàn từ trường (QMC5883L / GY271).
+- **Sensor:** Khối thu thập dữ liệu đa chiều từ các cảm biến: nhiệt độ, áp suất (BMP280), gia tốc, con quay hồi chuyển (MPU6500), la bàn từ trường (QMC5883L / GY271).
 - **GPS:** Module định vị vệ tinh cung cấp tọa độ (Kinh độ, Vĩ độ) và cao độ.
 - **Storage:** Module quản lý thẻ nhớ SD với các lệnh phân cấp cây thư mục tựa Linux (pwd, cd, ls, mkdir, rm, touch).
 

@@ -7,6 +7,7 @@
 #define PTIT_BUS_I2C    0
 #define PTIT_BUS_SPI    1
 #define PTIT_BUS_SERIAL 2
+#define PTIT_BUS_UART2  2
 #define PTIT_BUS_LORA   3
 #define PTIT_NUM_BUSES  4
 

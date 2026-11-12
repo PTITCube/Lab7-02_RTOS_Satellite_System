@@ -15,24 +15,20 @@ void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
     }
 
     if (initMPU) {
-        // Khởi tạo MPU (Adafruit_MPU6050 begin sẽ fail nếu là MPU6500 do khác WHO_AM_I)
+        // Khởi tạo MPU6500 (thanh ghi tương thích với dải cấu hình MPU)
         mpu.begin(0x68);
         
-        // Đọc thủ công thanh ghi WHO_AM_I để phân biệt MPU6050 vs MPU6500
+        // Đọc thủ công thanh ghi WHO_AM_I (0x75) của MPU6500 (kỳ vọng 0x70)
         Wire.beginTransmission(0x68);
         Wire.write(0x75);
         Wire.endTransmission(false);
         Wire.requestFrom((uint16_t)0x68, (uint8_t)1);
         uint8_t whoami = Wire.read();
 
-        if (whoami == 0x68) {
-            Serial.println("MPU6050 found!");
-        } else if (whoami == 0x70) {
+        if (whoami == 0x70) {
             Serial.println("MPU6500 found!");
-        } else if (whoami == 0x71) {
-            Serial.println("MPU9250 found!");
         } else {
-            Serial.printf("MPU fail (WHO_AM_I = 0x%02X)\n", whoami);
+            Serial.printf("MPU fail (WHO_AM_I = 0x%02X, expected 0x70 for MPU6500)\n", whoami);
         }
 
         // Bắt buộc đánh thức cảm biến (Ghi 0 vào thanh ghi PWR_MGMT_1)
