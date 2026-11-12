@@ -13,8 +13,11 @@
  */
 
 #include <Arduino.h>
+#include <PTITCube.h>
 #include <ArduinoJson.h>
 #include "PTITCube.h"
+
+PTIT_CDH cdh;
 
 // ============================================================================
 // 1. KHAI BÁO CÁC ĐỐI TƯỢNG PHÂN HỆ VỆ TINH
@@ -24,7 +27,6 @@ PTIT_GPS gps;
 PTIT_COM lora;
 PTIT_EPS eps;
 PTIT_Storage storage;
-PTIT_CDH cdh;
 PTIT_Camera camera;
 
 PTIT_Scheduler scheduler;
@@ -226,8 +228,8 @@ void telemetryLoop() {
 // 3. SETUP - Khởi tạo phân hệ + đăng ký task
 // ============================================================================
 void setup() {
-    Serial.begin(115200);
-    while (!Serial) { delay(10); }
+    cdh.begin(115200);
+    while (!cdh) { delay(10); }
 
     // Khởi tạo các phân hệ
     sensor.init();
@@ -256,7 +258,7 @@ void setup() {
     // Bắt đầu chạy đa nhiệm!
     scheduler.start();
 
-    Serial.println("CubeSat Firmware v2.0 — Đang hoạt động!");
+    cdh.println("CubeSat Firmware v2.0 — Đang hoạt động!");
 }
 
 // ============================================================================
