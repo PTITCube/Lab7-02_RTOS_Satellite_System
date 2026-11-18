@@ -1,11 +1,20 @@
 #include "COM.h"
 
-// Constants for pins
+#ifndef LORA_AUX_PIN
 #define LORA_AUX_PIN 27
-#define LORA_M0_PIN 32
-#define LORA_M1_PIN 33
-#define LORA_RX_PIN 26
-#define LORA_TX_PIN 25
+#endif
+#ifndef LORA_M0_PIN
+#define LORA_M0_PIN  32
+#endif
+#ifndef LORA_M1_PIN
+#define LORA_M1_PIN  33
+#endif
+#ifndef LORA_RX_PIN
+#define LORA_RX_PIN  26
+#endif
+#ifndef LORA_TX_PIN
+#define LORA_TX_PIN  25
+#endif
 
 PTIT_COM::PTIT_COM() {
     _serial = &Serial1;
@@ -17,8 +26,6 @@ PTIT_COM::PTIT_COM() {
 }
 
 void PTIT_COM::init() {
-    Serial.println("[COM] Initializing LoRa Module (UART1)...");
-    
     pinMode(_m0Pin, OUTPUT);
     pinMode(_m1Pin, OUTPUT);
     pinMode(_auxPin, INPUT);
@@ -31,26 +38,21 @@ void PTIT_COM::init() {
     if (SleepModeCmd(R_CFG, &config) == RET_SUCCESS) {
         config.ADDH = 0x00;
         config.ADDL = 0x00;
-        config.CHAN = 0x17;
-        config.OPTION_bits.trsm_mode = TRSM_FP_MODE;
+        config.CHAN = 0x17; // Kênh 23 (433 MHz)
+        config.OPTION_bits.trsm_mode = TRSM_TT_MODE; // Chế độ Transparent (0x00) cho truyền thông 2 chiều thông suốt
         config.OPTION_bits.tsmt_pwr = TSMT_PWR_20DB;
         SleepModeCmd(W_CFG_PWR_DWN_SAVE, &config);
-        Serial.println("[COM] LoRa Module OK");
-    } else {
-        Serial.println("[COM] LoRa config failed");
     }
 }
 
 String PTIT_COM::update() {
     SwitchMode(MODE_0_NORMAL);
-    if (_serial->available() > 1) {
+    if (_serial->available() > 0) {
         String msg = "";
         while (_serial->available()) {
             msg += (char)_serial->read();
-            delay(2);
+            delay(3);
         }
-        Serial.print("[COM] Nhận được tin nhắn LoRa: ");
-        Serial.println(msg);
         return msg;
     }
     return "";
@@ -68,26 +70,23 @@ void PTIT_COM::sendMessage(String msg) {
     int maxLen = 50; 
     int len = msg.length();
     
+    // Đảm bảo module ở chế độ hoạt động bình thường và đợi rảnh
+    SwitchMode(MODE_0_NORMAL);
+    WaitAUX_H();
+    delay(20); // Thời gian chuyển mạch RX -> TX của transceiver bán song công
+    
     if (len <= maxLen) {
-        SwitchMode(MODE_0_NORMAL);
-        if (ReadAUX() != HIGH) return;
         _serial->print(msg);
+        _serial->flush();
         WaitAUX_H();
-        
-        Serial.print("[COM] Đã gửi tin nhắn: ");
-        Serial.print(msg);
     } else {
-        Serial.println("[COM] Tin nhắn quá dài (" + String(len) + " bytes), đang chia nhỏ...");
         for (int i = 0; i < len; i += maxLen) {
             String chunk = msg.substring(i, i + maxLen);
-            SwitchMode(MODE_0_NORMAL);
-            if (ReadAUX() != HIGH) continue;
-            _serial->print(chunk);
             WaitAUX_H();
-            
-            Serial.print("[COM] Đã gửi chunk: ");
-            Serial.print(chunk);
-            delay(200);
+            _serial->print(chunk);
+            _serial->flush();
+            WaitAUX_H();
+            delay(50);
         }
     }
 }
@@ -115,7 +114,7 @@ bool PTIT_COM::setTransmissionMode(uint8_t mode) {
 }
 
 // ---------------------------------------------------------
-// Low-level AS32 Driver Implementation
+// Low-level AS32 / E32 Driver Implementation
 // ---------------------------------------------------------
 
 bool PTIT_COM::ReadAUX() {
@@ -126,7 +125,7 @@ RET_STATUS PTIT_COM::WaitAUX_H() {
     RET_STATUS STATUS = RET_SUCCESS;
     uint8_t cnt = 0;
     while ((ReadAUX() == LOW) && (cnt++ < 100)) {
-        delay(10);
+        delay(5);
     }
     if (cnt >= 100) {
         STATUS = RET_TIMEOUT;
@@ -179,17 +178,19 @@ void PTIT_COM::cleanUARTBuf() {
 }
 
 void PTIT_COM::triple_cmd(SLEEP_MODE_CMD_TYPE Tcmd) {
-    uint8_t CMD[3] = {(uint8_t)Tcmd, (uint8_t)Tcmd, (uint8_t)Tcmd};
+    uint8_t CMD[3] = { (uint8_t)Tcmd, (uint8_t)Tcmd, (uint8_t)Tcmd };
     _serial->write(CMD, 3);
     delay(50);
 }
 
 RET_STATUS PTIT_COM::Module_info(uint8_t* pReadbuf, uint8_t buf_len) {
     RET_STATUS STATUS = RET_SUCCESS;
-    uint8_t Readcnt = _serial->available();
-    if (Readcnt >= buf_len) {
-        for (uint8_t idx = 0; idx < buf_len; idx++) {
-            *(pReadbuf + idx) = _serial->read();
+    uint8_t Readcnt, idx;
+
+    Readcnt = _serial->available();
+    if (Readcnt == buf_len) {
+        for (idx = 0; idx < buf_len; idx++) {
+            pReadbuf[idx] = _serial->read();
         }
     } else {
         STATUS = RET_DATA_SIZE_NOT_MATCH;
@@ -199,33 +200,36 @@ RET_STATUS PTIT_COM::Module_info(uint8_t* pReadbuf, uint8_t buf_len) {
 }
 
 RET_STATUS PTIT_COM::Write_CFG_PDS(struct CFGstruct* pCFG) {
-    _serial->write((uint8_t *)pCFG, sizeof(CFGstruct));
+    cleanUARTBuf();
+    _serial->write((uint8_t*)pCFG, 6);
     WaitAUX_H();
-    delay(100);
     return RET_SUCCESS;
 }
 
 RET_STATUS PTIT_COM::Read_CFG(struct CFGstruct* pCFG) {
+    RET_STATUS STATUS = RET_SUCCESS;
     cleanUARTBuf();
     triple_cmd(R_CFG);
-    return Module_info((uint8_t *)pCFG, sizeof(CFGstruct));
+    STATUS = Module_info((uint8_t*)pCFG, sizeof(CFGstruct));
+    return STATUS;
 }
 
 RET_STATUS PTIT_COM::Read_module_version(struct MVerstruct* MVer) {
+    RET_STATUS STATUS = RET_SUCCESS;
     cleanUARTBuf();
     triple_cmd(R_MODULE_VERSION);
-    return Module_info((uint8_t *)MVer, sizeof(MVerstruct));
+    STATUS = Module_info((uint8_t*)MVer, sizeof(MVerstruct));
+    return STATUS;
 }
 
 void PTIT_COM::Reset_module() {
     triple_cmd(W_RESET_MODULE);
     WaitAUX_H();
-    delay(1000);
+    delay(100);
 }
 
 RET_STATUS PTIT_COM::SleepModeCmd(uint8_t CMD, void* pBuff) {
     RET_STATUS STATUS = RET_SUCCESS;
-    WaitAUX_H();
     SwitchMode(MODE_3_SLEEP);
     switch (CMD) {
         case W_CFG_PWR_DWN_SAVE:
@@ -234,15 +238,18 @@ RET_STATUS PTIT_COM::SleepModeCmd(uint8_t CMD, void* pBuff) {
         case R_CFG:
             STATUS = Read_CFG((struct CFGstruct*)pBuff);
             break;
+        case W_CFG_PWR_DWN_LOSE:
+            break;
         case R_MODULE_VERSION:
-            Read_module_version((struct MVerstruct*)pBuff);
+            STATUS = Read_module_version((struct MVerstruct*)pBuff);
             break;
         case W_RESET_MODULE:
             Reset_module();
             break;
         default:
-            return RET_INVALID_PARAM;
+            STATUS = RET_INVALID_PARAM;
+            break;
     }
-    WaitAUX_H();
+    SwitchMode(MODE_0_NORMAL);
     return STATUS;
 }
