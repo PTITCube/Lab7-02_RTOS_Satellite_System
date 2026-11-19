@@ -22,7 +22,7 @@ bool PTIT_Camera::initializeSd() {
     
     SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
     if (!SD.begin(SD_CS_PIN, SPI, 8000000)) {
-        Serial.println("[Camera] MicroSD mount failed");
+        Serial.println("Camera: MicroSD mount failed");
         sdReady = false;
         return false;
     }
@@ -86,7 +86,7 @@ bool PTIT_Camera::capture() {
 
 bool PTIT_Camera::captureToFile(const char* path) {
     if (!sdReady) {
-        Serial.println("[Camera] Loi: The nho SD chua san sang.");
+        Serial.println("Camera: Loi: The nho SD chua san sang.");
         return false;
     }
 
@@ -116,7 +116,7 @@ bool PTIT_Camera::captureToFile(const char* path) {
                 break;
             }
             if (response.startsWith("ERROR:")) {
-                Serial.println("[Camera] " + response);
+                Serial.println("Camera: " + response);
                 selectGPS(); // Trả lại kênh cho GPS khi có lỗi
                 return false;
             }
@@ -125,7 +125,7 @@ bool PTIT_Camera::captureToFile(const char* path) {
     }
 
     if (!sizeReceived || imageSize <= 0) {
-        Serial.println("[Camera] Timeout: No response from ESP32-CAM");
+        Serial.println("Camera: Timeout: No response from ESP32-CAM");
         selectGPS(); // Trả lại kênh cho GPS khi timeout
         return false;
     }
@@ -137,7 +137,7 @@ bool PTIT_Camera::captureToFile(const char* path) {
         String dirPath = filePath.substring(0, lastSlash);
         if (!SD.exists(dirPath.c_str())) {
             if (!SD.mkdir(dirPath.c_str())) {
-                Serial.println("[Camera] Error creating dir: " + dirPath);
+                Serial.println("Camera: Error creating dir: " + dirPath);
                 selectGPS();
                 return false;
             }
@@ -147,7 +147,7 @@ bool PTIT_Camera::captureToFile(const char* path) {
     // 4. Mở file để ghi
     File file = SD.open(path, FILE_WRITE);
     if (!file) {
-        Serial.println("[Camera] Error opening file: " + String(path));
+        Serial.println("Camera: Error opening file: " + String(path));
         selectGPS();
         return false;
     }
@@ -180,11 +180,11 @@ bool PTIT_Camera::captureToFile(const char* path) {
     // 7. Hoàn tất và TRẢ LẠI KÊNH CHO GPS
     bool success = false;
     if (receivedBytes == imageSize) {
-        Serial.printf("[Camera] Saved %s (%ld bytes)\n", path, imageSize);
+        Serial.printf("Camera: Saved %s (%ld bytes)\n", path, imageSize);
         Serial2.println("DONE"); // Báo ESP32-CAM kết thúc
         success = true;
     } else {
-        Serial.printf("[Camera] Incomplete transfer: %ld/%ld bytes\n", receivedBytes, imageSize);
+        Serial.printf("Camera: Incomplete transfer: %ld/%ld bytes\n", receivedBytes, imageSize);
         success = false;
     }
 

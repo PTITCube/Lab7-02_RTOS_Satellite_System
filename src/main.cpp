@@ -66,7 +66,7 @@ void gpsLoop() {
 // Xử lý các lệnh hệ thống (trả về chuỗi rỗng nếu không phải lệnh hệ thống)
 String processSystemCommand(String command) {
     if (command == "ping") {
-        PTIT_Scheduler::println("[CMD] ping");
+        PTIT_Scheduler::println("CMD: ping");
         if (PTIT_Scheduler::lock(PTIT_BUS_LORA, 500)) {
             for (int i = 0; i < 4; i++) {
                 lora.sendMessage("ACK " + String(i + 1) + "/4");
@@ -77,7 +77,7 @@ String processSystemCommand(String command) {
         return "PING_HANDLED"; // Cờ đặc biệt để không gửi response chung
     }
     if (command == "reboot") {
-        PTIT_Scheduler::println("[CMD] reboot");
+        PTIT_Scheduler::println("CMD: reboot");
         if (PTIT_Scheduler::lock(PTIT_BUS_LORA, 500)) lora.sendMessage("Rebooting...");
         PTIT_Scheduler::unlock(PTIT_BUS_LORA);
         delay(500);
@@ -147,7 +147,7 @@ void comLoop() {
         }
 
         // Gửi phản hồi qua LoRa
-        PTIT_Scheduler::println("[CMD] " + command + " → " + response);
+        PTIT_Scheduler::println("CMD: " + command + " → " + response);
         if (PTIT_Scheduler::lock(PTIT_BUS_LORA, 500)) {
             lora.sendMessage(response);
             PTIT_Scheduler::unlock(PTIT_BUS_LORA);
@@ -185,12 +185,12 @@ void telemetryLoop() {
     String gpsMqtt = buildJson("\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6));
     String gpsLora = buildJson("\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6)); // GPS cần giữ độ phân giải 6 số
 
-    PTIT_Scheduler::println("\n[TELEMETRY] EPS: " + epsMqtt);
-    PTIT_Scheduler::println("[TELEMETRY] Env: " + envMqtt);
-    PTIT_Scheduler::println("[TELEMETRY] Acc: " + accMqtt);
-    PTIT_Scheduler::println("[TELEMETRY] Gyro: " + gyroMqtt);
-    PTIT_Scheduler::println("[TELEMETRY] Mag: " + magMqtt);
-    PTIT_Scheduler::println("[TELEMETRY] GPS: " + gpsMqtt);
+    PTIT_Scheduler::println("\nTELEMETRY - EPS: " + epsMqtt);
+    PTIT_Scheduler::println("TELEMETRY - Env: " + envMqtt);
+    PTIT_Scheduler::println("TELEMETRY - Acc: " + accMqtt);
+    PTIT_Scheduler::println("TELEMETRY - Gyro: " + gyroMqtt);
+    PTIT_Scheduler::println("TELEMETRY - Mag: " + magMqtt);
+    PTIT_Scheduler::println("TELEMETRY - GPS: " + gpsMqtt);
 
     if (PTIT_Scheduler::lock(PTIT_BUS_SPI, 200)) {
         storage.logData(epsMqtt.c_str()); storage.logData(envMqtt.c_str());

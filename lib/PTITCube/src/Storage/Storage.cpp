@@ -14,7 +14,7 @@ void PTIT_Storage::init() {
   SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
 
   if (!SD.begin(SD_CS_PIN, SPI, 8000000)) {
-    Serial.println("[Storage] MicroSD mount failed");
+    Serial.println("Storage: MicroSD mount failed");
     sdReady = false;
   } else {
     sdReady = true;
@@ -41,7 +41,7 @@ bool PTIT_Storage::writeFile(const char *path, const char *content) {
     return false;
   File file = SD.open(path, FILE_WRITE);
   if (!file) {
-    Serial.println("[Storage] Không thể mở file để ghi: " + String(path));
+    Serial.println("Storage: Không thể mở file để ghi: " + String(path));
     return false;
   }
   bool ok = file.print(content);
@@ -54,7 +54,7 @@ bool PTIT_Storage::appendFile(const char *path, const char *content) {
     return false;
   File file = SD.open(path, FILE_APPEND);
   if (!file) {
-    Serial.println("[Storage] Không thể mở file để ghi thêm: " + String(path));
+    Serial.println("Storage: Không thể mở file để ghi thêm: " + String(path));
     return false;
   }
   bool ok = file.print(content);
@@ -70,7 +70,7 @@ String PTIT_Storage::readFile(const char *path) {
     return "";
   File file = SD.open(path);
   if (!file) {
-    Serial.println("[Storage] Không thể mở file để đọc: " + String(path));
+    Serial.println("Storage: Không thể mở file để đọc: " + String(path));
     return "";
   }
   String content = "";
@@ -94,12 +94,12 @@ bool PTIT_Storage::removeFile(const char *path) {
   if (!sdReady)
     return false;
   if (!SD.exists(path)) {
-    Serial.println("[Storage] File không tồn tại: " + String(path));
+    Serial.println("Storage: File không tồn tại: " + String(path));
     return false;
   }
   bool ok = SD.remove(path);
   if (ok) {
-    Serial.println("[Storage] Đã xóa: " + String(path));
+    Serial.println("Storage: Đã xóa: " + String(path));
   }
   return ok;
 }
@@ -108,12 +108,12 @@ bool PTIT_Storage::renameFile(const char *from, const char *to) {
   if (!sdReady)
     return false;
   if (!SD.exists(from)) {
-    Serial.println("[Storage] File nguồn không tồn tại: " + String(from));
+    Serial.println("Storage: File nguồn không tồn tại: " + String(from));
     return false;
   }
   bool ok = SD.rename(from, to);
   if (ok) {
-    Serial.println("[Storage] Đã đổi tên: " + String(from) + " → " +
+    Serial.println("Storage: Đã đổi tên: " + String(from) + " → " +
                    String(to));
   }
   return ok;
@@ -141,9 +141,9 @@ bool PTIT_Storage::createDir(const char *path) {
   }
   bool ok = SD.mkdir(path);
   if (ok) {
-    Serial.println("[Storage] Đã tạo thư mục: " + String(path));
+    Serial.println("Storage: Đã tạo thư mục: " + String(path));
   } else {
-    Serial.println("[Storage] Không thể tạo thư mục: " + String(path));
+    Serial.println("Storage: Không thể tạo thư mục: " + String(path));
   }
   return ok;
 }
@@ -153,9 +153,9 @@ bool PTIT_Storage::removeDir(const char *path) {
     return false;
   bool ok = SD.rmdir(path);
   if (ok) {
-    Serial.println("[Storage] Đã xóa thư mục: " + String(path));
+    Serial.println("Storage: Đã xóa thư mục: " + String(path));
   } else {
-    Serial.println("[Storage] Không thể xóa thư mục (có thể chưa rỗng): " +
+    Serial.println("Storage: Không thể xóa thư mục (có thể chưa rỗng): " +
                    String(path));
   }
   return ok;
@@ -163,17 +163,17 @@ bool PTIT_Storage::removeDir(const char *path) {
 
 void PTIT_Storage::listDir(const char *dirname, uint8_t levels) {
   if (!sdReady) {
-    Serial.println("[Storage] Thẻ nhớ chưa sẵn sàng");
+    Serial.println("Storage: Thẻ nhớ chưa sẵn sàng");
     return;
   }
 
   File root = SD.open(dirname);
   if (!root || !root.isDirectory()) {
-    Serial.println("[Storage] Không thể mở thư mục: " + String(dirname));
+    Serial.println("Storage: Không thể mở thư mục: " + String(dirname));
     return;
   }
 
-  Serial.println("[Storage] Nội dung thư mục: " + String(dirname));
+  Serial.println("Storage: Nội dung thư mục: " + String(dirname));
 
   File file = root.openNextFile();
   while (file) {

@@ -15,7 +15,7 @@ static SemaphoreHandle_t _busMutex[PTIT_NUM_BUSES] = { NULL };
 void PTIT_Scheduler::addTask(const char* name, TaskFunction fn, uint32_t intervalMs,
                               uint8_t core, uint8_t priority, uint16_t stackSize) {
     if (_taskCount >= PTIT_MAX_TASKS) {
-        Serial.println("[Scheduler] LỖI: Đã đạt giới hạn " + String(PTIT_MAX_TASKS) + " task!");
+        Serial.println("Scheduler: LỖI: Đã đạt giới hạn " + String(PTIT_MAX_TASKS) + " task!");
         return;
     }
 
@@ -28,7 +28,7 @@ void PTIT_Scheduler::addTask(const char* name, TaskFunction fn, uint32_t interva
     t.stackSize  = stackSize;
     _taskCount++;
 
-    Serial.println("[Scheduler] Đã đăng ký task: " + String(name) +
+    Serial.println("Scheduler: Đã đăng ký task: " + String(name) +
                    " (chu kỳ " + String(intervalMs) + "ms, Core " + String(core) +
                    ", Priority " + String(priority) + ")");
 }
