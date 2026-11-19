@@ -11,6 +11,7 @@ public:
     void update();
     float getTemperature();
     float getPressure();
+    float getAltitude();
     float getAccX();
     float getAccY();
     float getAccZ();
@@ -20,6 +21,9 @@ public:
     float getMagX();
     float getMagY();
     float getMagZ();
+    float getRoll();
+    float getPitch();
+    float getHeading();
 
 private:
     Adafruit_BMP280 bmp;
@@ -33,3 +37,4 @@ private:
 };
 
 #endif
+
