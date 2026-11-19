@@ -5,8 +5,8 @@
 #include <Wire.h>
 
 #define EPS_PIN_BUCK_CTRL   4
-#define EPS_BUCK_POWER_ON   LOW   // Mức 0: Bật nguồn tải
-#define EPS_BUCK_POWER_OFF  HIGH  // Mức 1: Ngắt nguồn tải (tiết kiệm điện)
+#define EPS_BUCK_POWER_ON   HIGH  // Mức 1: Bật nguồn hạ áp (cấp nguồn cảm biến)
+#define EPS_BUCK_POWER_OFF  LOW   // Mức 0: Ngắt nguồn hạ áp (tiết kiệm điện)
 
 /**
  * @brief Phân hệ Năng lượng (EPS) sử dụng IC đo dung lượng pin chuyên dụng MAX17048 qua I2C.

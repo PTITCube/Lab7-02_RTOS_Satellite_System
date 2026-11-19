@@ -25,9 +25,10 @@
 #define LORA_M1       LORA_M1_PIN
 
 // --- Phân hệ Nguồn EPS ---
-#define EPS_SDA_PIN   21
-#define EPS_SCL_PIN   22
-#define EPS_PWR_GATE  4   // Điều khiển mạch hạ áp (Power Gating)
+#define EPS_SDA_PIN     21
+#define EPS_SCL_PIN     22
+#define EPS_PWR_GATE    4   // Điều khiển mạch hạ áp (Power Gating)
+#define SENSOR_BUCK_PIN 4   // Chân kích hoạt mạch hạ áp cấp nguồn cảm biến
 
 // --- Phân hệ Lưu trữ Storage & CDH (MicroSD - VSPI) ---
 #define SD_CS_PIN     13
