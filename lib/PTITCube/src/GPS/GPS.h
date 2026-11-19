@@ -49,7 +49,7 @@ public:
 
 private:
     TinyGPSPlus gps;
-    HardwareSerial gpsSerial;
+    HardwareSerial& gpsSerial;
     uint8_t gpsSelectPin;
     uint8_t camSelectPin;
     char nmeaBuffer[128];

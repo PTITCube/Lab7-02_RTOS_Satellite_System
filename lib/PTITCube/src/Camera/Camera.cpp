@@ -73,6 +73,7 @@ void PTIT_Camera::selectCamera() {
         // BẬT Camera sau
         digitalWrite(camSelectPin, HIGH);
         Serial2.begin(CAM_BAUD, SERIAL_8N1, 16, 17);
+        delay(100);
     }
 }
 
@@ -86,12 +87,15 @@ bool PTIT_Camera::capture() {
 
 bool PTIT_Camera::captureToFile(const char* path) {
     if (!sdReady) {
-        Serial.println("Camera: Loi: The nho SD chua san sang.");
-        return false;
+        if (!initializeSd()) {
+            Serial.println("Camera: Loi: The nho SD chua san sang.");
+            return false;
+        }
     }
 
     // Đảm bảo kênh MUX đang trỏ vào Camera và cổng Serial2 chuyển sang 115200
     selectCamera();
+    delay(100);
 
     // Dọn dẹp bộ nhớ đệm UART2
     while(Serial2.available()) Serial2.read();

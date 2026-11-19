@@ -1,6 +1,6 @@
 #include "GPS.h"
 
-PTIT_GPS::PTIT_GPS() : gpsSerial(2), gpsSelectPin(12), camSelectPin(14), bufferIndex(0) {
+PTIT_GPS::PTIT_GPS() : gpsSerial(Serial2), gpsSelectPin(12), camSelectPin(14), bufferIndex(0) {
     nmeaBuffer[0] = '\0';
 }
 
