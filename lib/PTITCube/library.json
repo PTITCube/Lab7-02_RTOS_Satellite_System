@@ -1,0 +1,17 @@
+{
+  "name": "PTITCube",
+  "version": "1.1.0",
+  "description": "Firmware library for PTIT-STEM-CUBE Satellite",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "dependencies": {
+    "wnatth3/WiFiManager": "^2.0.16-rc.2",
+    "knolleary/PubSubClient": "^2.8",
+    "bblanchon/ArduinoJson": "^7.1.0",
+    "mikalhart/TinyGPSPlus": "^1.0.3",
+    "adafruit/Adafruit MPU6050": "^2.2.6",
+    "adafruit/Adafruit BMP280 Library": "^2.6.8",
+    "adafruit/Adafruit QMC5883P Library": "^1.0.2",
+    "esp32-camera": "https://github.com/espressif/esp32-camera.git"
+  }
+}
