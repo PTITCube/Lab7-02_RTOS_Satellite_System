@@ -185,12 +185,7 @@ void telemetryLoop() {
     String gpsMqtt = buildJson("\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6));
     String gpsLora = buildJson("\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6)); // GPS cần giữ độ phân giải 6 số
 
-    PTIT_Scheduler::println("\nTELEMETRY - EPS: " + epsMqtt);
-    PTIT_Scheduler::println("TELEMETRY - Env: " + envMqtt);
-    PTIT_Scheduler::println("TELEMETRY - Acc: " + accMqtt);
-    PTIT_Scheduler::println("TELEMETRY - Gyro: " + gyroMqtt);
-    PTIT_Scheduler::println("TELEMETRY - Mag: " + magMqtt);
-    PTIT_Scheduler::println("TELEMETRY - GPS: " + gpsMqtt);
+    PTIT_Scheduler::println("TELEM: V=" + String(v, 2) + "V, T=" + String(t, 1) + "C, GPS=(" + String(lat, 4) + "," + String(lng, 4) + ")");
 
     if (PTIT_Scheduler::lock(PTIT_BUS_SPI, 200)) {
         storage.logData(epsMqtt.c_str()); storage.logData(envMqtt.c_str());
@@ -257,7 +252,6 @@ void setup() {
     // Bắt đầu chạy đa nhiệm!
     scheduler.start();
 
-    cdh.println("CubeSat Firmware v2.0 — Đang hoạt động!");
 }
 
 // ============================================================================
