@@ -17,7 +17,6 @@ void PTIT_GPS::init(uint8_t gpsSelectPin, uint8_t camSelectPin) {
         digitalWrite(this->gpsSelectPin, HIGH);
     }
 
-    Serial.println("[GPS] Initializing GPS NEO (UART2, RX=16, TX=17)...");
     gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
 }
 

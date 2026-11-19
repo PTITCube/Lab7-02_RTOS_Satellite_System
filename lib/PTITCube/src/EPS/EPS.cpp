@@ -12,20 +12,16 @@ PTIT_EPS::PTIT_EPS() : lastVoltage(0.0f), lastPercent(0.0f), lastRate(0.0f), sen
 }
 
 bool PTIT_EPS::init() {
-    Serial.println("[EPS] Initializing Power System (MAX17048 Fuel Gauge via I2C)...");
     Wire.begin();
     
     // Kiểm tra kết nối tới MAX17048
     Wire.beginTransmission(MAX17048_I2C_ADDR);
     if (Wire.endTransmission() == 0) {
         sensorReady = true;
-        uint16_t ver = readRegister16(MAX17048_REG_VER);
-        Serial.printf("[EPS] MAX17048 detected at 0x%02X (IC Version: 0x%04X).\n", MAX17048_I2C_ADDR, ver);
         update();
         return true;
     } else {
         sensorReady = false;
-        Serial.println("[EPS] WARNING: MAX17048 not detected at 0x36! Check I2C wiring (SDA=21, SCL=22).");
         return false;
     }
 }

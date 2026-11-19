@@ -11,22 +11,13 @@
 // Khởi tạo
 // ============================================================================
 void PTIT_Storage::init() {
-  Serial.println("[Storage] Initializing MicroSD (SPI)...");
   SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
 
   if (!SD.begin(SD_CS_PIN, SPI, 8000000)) {
     Serial.println("[Storage] MicroSD mount failed");
     sdReady = false;
   } else {
-    Serial.println("[Storage] MicroSD mount OK");
     sdReady = true;
-
-    // In thông tin thẻ nhớ
-    Serial.print("[Storage] Tổng: ");
-    Serial.print(SD.totalBytes() / (1024 * 1024));
-    Serial.print(" MB, Đã dùng: ");
-    Serial.print(SD.usedBytes() / (1024 * 1024));
-    Serial.println(" MB");
   }
 }
 

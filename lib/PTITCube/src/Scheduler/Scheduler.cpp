@@ -70,10 +70,6 @@ void PTIT_Scheduler::taskWrapper(void* pvParameters) {
 // API: Tạo và chạy tất cả task
 // ============================================================================
 void PTIT_Scheduler::start() {
-    Serial.println("========================================");
-    Serial.println(" PTIT_Scheduler — FreeRTOS Task Manager");
-    Serial.println("========================================");
-
     // Tạo mutex cho các bus
     for (int i = 0; i < PTIT_NUM_BUSES; i++) {
         _busMutex[i] = xSemaphoreCreateMutex();
@@ -83,15 +79,12 @@ void PTIT_Scheduler::start() {
     if (_wdtEnabled) {
         esp_task_wdt_init(_wdtTimeout, true); // true = reset ESP32 khi timeout
         _wdtActive = true;
-        Serial.println("[WDT] Watchdog Timer đã bật (timeout: " + String(_wdtTimeout) + "s)");
     }
 
     // Tạo từng task đã đăng ký
-    Serial.println("[Scheduler] Đang tạo " + String(_taskCount) + " task...");
-
     for (uint8_t i = 0; i < _taskCount; i++) {
         TaskHandle_t handle = NULL;
-        BaseType_t result = xTaskCreatePinnedToCore(
+        xTaskCreatePinnedToCore(
             taskWrapper,             // Hàm wrapper
             _tasks[i].name,          // Tên task
             _tasks[i].stackSize,     // Stack size
@@ -100,17 +93,7 @@ void PTIT_Scheduler::start() {
             &handle,                 // Task handle
             _tasks[i].core           // Core
         );
-
-        if (result == pdPASS) {
-            Serial.println("[Scheduler] ✓ " + String(_tasks[i].name) +
-                           " → Core " + String(_tasks[i].core));
-        } else {
-            Serial.println("[Scheduler] ✗ THẤT BẠI: " + String(_tasks[i].name));
-        }
     }
-
-    Serial.println("[Scheduler] Hoàn tất! " + String(_taskCount) + " task đang chạy.");
-    Serial.println("========================================");
 }
 
 // ============================================================================

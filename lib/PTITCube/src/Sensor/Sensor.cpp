@@ -3,33 +3,14 @@
 #include <Wire.h>
 
 void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
-    Serial.println("[Sensor] Initializing Sensors...");
     Wire.begin(21, 22);
 
     if (initBMP) {
-        if (!bmp.begin(0x76) && !bmp.begin(0x77)) {
-            Serial.println("BMP280 fail");
-        } else {
-            Serial.println("BMP280 found!");
-        }
+        bmp.begin(0x76) || bmp.begin(0x77);
     }
 
     if (initMPU) {
-        // Khởi tạo MPU6500 (thanh ghi tương thích với dải cấu hình MPU)
         mpu.begin(0x68);
-        
-        // Đọc thủ công thanh ghi WHO_AM_I (0x75) của MPU6500 (kỳ vọng 0x70)
-        Wire.beginTransmission(0x68);
-        Wire.write(0x75);
-        Wire.endTransmission(false);
-        Wire.requestFrom((uint16_t)0x68, (uint8_t)1);
-        uint8_t whoami = Wire.read();
-
-        if (whoami == 0x70) {
-            Serial.println("MPU6500 found!");
-        } else {
-            Serial.printf("MPU fail (WHO_AM_I = 0x%02X, expected 0x70 for MPU6500)\n", whoami);
-        }
 
         // Bắt buộc đánh thức cảm biến (Ghi 0 vào thanh ghi PWR_MGMT_1)
         Wire.beginTransmission(0x68);
@@ -43,10 +24,7 @@ void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
     }
 
     if (initQMC) {
-        if (!qmc.begin()) {
-            Serial.println("QMC5883P fail");
-        } else {
-            Serial.println("QMC5883P found!");
+        if (qmc.begin()) {
             qmc.setMode(QMC5883P_MODE_CONTINUOUS);
             qmc.setRange(QMC5883P_RANGE_2G);
             qmc.setODR(QMC5883P_ODR_50HZ);
