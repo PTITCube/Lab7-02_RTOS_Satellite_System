@@ -1,5 +1,54 @@
-.pio
+# PlatformIO build artifacts & cache
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+compile_commands.json
+
+# Build directories & binary outputs
+build/
+bin/
+*.elf
+*.bin
+*.hex
+*.o
+*.a
+*.d
+
+# Environment & Credentials (keep templates safe)
 .env
 .env.*
+.env.local
 !.env_example
+!.env.example
+
+# IDE & Editor configurations
 .vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+*.bak
+
+# Operating System temporary files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Logs & crash reports
+*.log
+*.dmp
