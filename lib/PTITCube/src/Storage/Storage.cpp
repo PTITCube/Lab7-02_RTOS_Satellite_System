@@ -41,7 +41,6 @@ bool PTIT_Storage::writeFile(const char *path, const char *content) {
     return false;
   File file = SD.open(path, FILE_WRITE);
   if (!file) {
-    Serial.println("Storage: Không thể mở file để ghi: " + String(path));
     return false;
   }
   bool ok = file.print(content);
@@ -54,7 +53,6 @@ bool PTIT_Storage::appendFile(const char *path, const char *content) {
     return false;
   File file = SD.open(path, FILE_APPEND);
   if (!file) {
-    Serial.println("Storage: Không thể mở file để ghi thêm: " + String(path));
     return false;
   }
   bool ok = file.print(content);
@@ -70,7 +68,6 @@ String PTIT_Storage::readFile(const char *path) {
     return "";
   File file = SD.open(path);
   if (!file) {
-    Serial.println("Storage: Không thể mở file để đọc: " + String(path));
     return "";
   }
   String content = "";
@@ -94,29 +91,18 @@ bool PTIT_Storage::removeFile(const char *path) {
   if (!sdReady)
     return false;
   if (!SD.exists(path)) {
-    Serial.println("Storage: File không tồn tại: " + String(path));
     return false;
   }
-  bool ok = SD.remove(path);
-  if (ok) {
-    Serial.println("Storage: Đã xóa: " + String(path));
-  }
-  return ok;
+  return SD.remove(path);
 }
 
 bool PTIT_Storage::renameFile(const char *from, const char *to) {
   if (!sdReady)
     return false;
   if (!SD.exists(from)) {
-    Serial.println("Storage: File nguồn không tồn tại: " + String(from));
     return false;
   }
-  bool ok = SD.rename(from, to);
-  if (ok) {
-    Serial.println("Storage: Đã đổi tên: " + String(from) + " → " +
-                   String(to));
-  }
-  return ok;
+  return SD.rename(from, to);
 }
 
 long PTIT_Storage::fileSize(const char *path) {
@@ -139,26 +125,13 @@ bool PTIT_Storage::createDir(const char *path) {
   if (SD.exists(path)) {
     return true; // Đã tồn tại
   }
-  bool ok = SD.mkdir(path);
-  if (ok) {
-    Serial.println("Storage: Đã tạo thư mục: " + String(path));
-  } else {
-    Serial.println("Storage: Không thể tạo thư mục: " + String(path));
-  }
-  return ok;
+  return SD.mkdir(path);
 }
 
 bool PTIT_Storage::removeDir(const char *path) {
   if (!sdReady)
     return false;
-  bool ok = SD.rmdir(path);
-  if (ok) {
-    Serial.println("Storage: Đã xóa thư mục: " + String(path));
-  } else {
-    Serial.println("Storage: Không thể xóa thư mục (có thể chưa rỗng): " +
-                   String(path));
-  }
-  return ok;
+  return SD.rmdir(path);
 }
 
 void PTIT_Storage::listDir(const char *dirname, uint8_t levels) {
@@ -241,6 +214,7 @@ String PTIT_Storage::resolvePath(const String &path) {
     return _currentDir.substring(0, lastSlash);
   }
 
+  String result;
   if (p.startsWith("../")) {
     String parentDir = "/";
     if (_currentDir != "/") {
@@ -248,21 +222,22 @@ String PTIT_Storage::resolvePath(const String &path) {
       if (lastSlash > 0) parentDir = _currentDir.substring(0, lastSlash);
     }
     String sub = p.substring(3);
-    return (parentDir == "/") ? ("/" + sub) : (parentDir + "/" + sub);
+    result = (parentDir == "/") ? ("/" + sub) : (parentDir + "/" + sub);
+  } else if (p.startsWith("./")) {
+    String sub = p.substring(2);
+    result = (_currentDir == "/") ? ("/" + sub) : (_currentDir + "/" + sub);
+  } else if (p.startsWith("/")) {
+    result = p;
+  } else {
+    result = (_currentDir == "/") ? ("/" + p) : (_currentDir + "/" + p);
   }
 
-  if (p.startsWith("./")) {
-    p = p.substring(2);
+  // Chuẩn hóa: loại bỏ dấu / ở cuối nếu có (trừ root "/")
+  while (result.length() > 1 && result.endsWith("/")) {
+    result = result.substring(0, result.length() - 1);
   }
 
-  if (p.startsWith("/")) {
-    return p;
-  }
-
-  if (_currentDir == "/") {
-    return "/" + p;
-  }
-  return _currentDir + "/" + p;
+  return result;
 }
 
 // ============================================================================
@@ -297,42 +272,48 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
   if (command == "cd") {
     if (arg1.length() == 0 || arg1 == "/" || arg1 == "~") {
       _currentDir = "/";
-      return "OK: cd /";
+      return "";
     }
 
     String newPath = resolvePath(arg1);
     if (newPath == "/") {
       _currentDir = "/";
-      return "OK: cd /";
+      return "";
+    }
+
+    if (!SD.exists(newPath.c_str())) {
+      return "ERR: Directory not found: " + newPath;
     }
 
     File f = SD.open(newPath.c_str());
     if (f && f.isDirectory()) {
       f.close();
       _currentDir = newPath;
-      return "OK: cd " + _currentDir;
+      return "";
     }
     if (f) f.close();
-    return "ERR: Directory not found: " + newPath;
+    return "ERR: Not a directory: " + newPath;
   }
 
   // ls [path]
   if (command == "ls") {
     String path = (arg1.length() > 0) ? resolvePath(arg1) : _currentDir;
     if (path != "/") {
-      File f = SD.open(path.c_str());
-      if (!f) {
+      if (!SD.exists(path.c_str())) {
         return "ERR: Path not found: " + path;
       }
-      if (!f.isDirectory()) {
-        Serial.printf("  FILE: %s (%ld bytes)\n", path.c_str(), f.size());
+      File f = SD.open(path.c_str());
+      if (f) {
+        if (!f.isDirectory()) {
+          Serial.printf("  FILE: %s (%ld bytes)\n", path.c_str(), f.size());
+          f.close();
+          return "";
+        }
         f.close();
-        return "OK: ls " + path;
       }
-      f.close();
     }
     listDir(path.c_str(), 0);
-    return "OK: ls " + path;
+    return "";
   }
 
   // cat <path>
@@ -340,17 +321,18 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
     if (arg1.length() == 0)
       return "ERR: cat <path>";
     String path = resolvePath(arg1);
-    File f = SD.open(path.c_str());
-    if (!f) {
+    if (!SD.exists(path.c_str())) {
       return "ERR: File not found: " + path;
     }
-    if (f.isDirectory()) {
+    File f = SD.open(path.c_str());
+    if (f) {
+      if (f.isDirectory()) {
+        f.close();
+        return "ERR: " + path + " is a directory";
+      }
       f.close();
-      return "ERR: " + path + " is a directory";
     }
-    f.close();
-    String content = readFile(path.c_str());
-    return content;
+    return readFile(path.c_str());
   }
 
   // touch <path>
@@ -363,7 +345,7 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
         return "ERR: Cannot create file: " + path;
       }
     }
-    return "OK: touch " + path;
+    return "";
   }
 
   // echo <text> [> | >> <file>]
@@ -380,7 +362,7 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
       String target = arg1.substring(appendPos + 2);
       target.trim();
       String path = resolvePath(target);
-      return appendFile(path.c_str(), (text + "\n").c_str()) ? "OK: append " + path : "ERR: append " + path;
+      return appendFile(path.c_str(), (text + "\n").c_str()) ? "" : "ERR: append " + path;
     } else if (writePos > 0) {
       String text = arg1.substring(0, writePos);
       text.trim();
@@ -391,7 +373,7 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
       String target = arg1.substring(writePos + 1);
       target.trim();
       String path = resolvePath(target);
-      return writeFile(path.c_str(), (text + "\n").c_str()) ? "OK: write " + path : "ERR: write " + path;
+      return writeFile(path.c_str(), (text + "\n").c_str()) ? "" : "ERR: write " + path;
     }
     return arg1;
   }
@@ -401,14 +383,10 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
     if (arg1.length() == 0)
       return "ERR: mkdir <path>";
     String path = resolvePath(arg1);
-    File f = SD.open(path.c_str());
-    if (f) {
-      bool isDir = f.isDirectory();
-      f.close();
-      if (isDir) return "ERR: Directory already exists: " + path;
-      return "ERR: File with same name exists: " + path;
+    if (SD.exists(path.c_str())) {
+      return "ERR: Directory already exists: " + path;
     }
-    return createDir(path.c_str()) ? "OK: mkdir " + path : "ERR: mkdir " + path;
+    return createDir(path.c_str()) ? "" : "ERR: Cannot create directory: " + path;
   }
 
   // rmdir <path>
@@ -418,7 +396,9 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
     String path = resolvePath(arg1);
     if (path == "/")
       return "ERR: Cannot remove root directory";
-    return removeDir(path.c_str()) ? "OK: rmdir " + path : "ERR: rmdir " + path;
+    if (!SD.exists(path.c_str()))
+      return "ERR: Directory not found: " + path;
+    return removeDir(path.c_str()) ? "" : "ERR: Cannot remove directory (may not be empty): " + path;
   }
 
   // rm <path>
@@ -426,13 +406,17 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
     if (arg1.length() == 0)
       return "ERR: rm <path>";
     String path = resolvePath(arg1);
+    if (!SD.exists(path.c_str()))
+      return "ERR: File not found: " + path;
     File f = SD.open(path.c_str());
-    if (f && f.isDirectory()) {
+    if (f) {
+      if (f.isDirectory()) {
+        f.close();
+        return "ERR: " + path + " is a directory (use rmdir)";
+      }
       f.close();
-      return "ERR: " + path + " is a directory (use rmdir)";
     }
-    if (f) f.close();
-    return removeFile(path.c_str()) ? "OK: rm " + path : "ERR: rm " + path;
+    return removeFile(path.c_str()) ? "" : "ERR: Cannot remove file: " + path;
   }
 
   // df
@@ -451,6 +435,6 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
     return "Commands: pwd, cd <dir>, ls [dir], cat <file>, touch <file>, echo <text> [> file], mkdir <dir>, rmdir <dir>, rm <file>, df, help";
   }
 
-  // Lệnh không nhận diện → trả về chuỗi rỗng
-  return "";
+  // Lệnh không nhận diện
+  return "Command not recognized. Type 'help' for commands.";
 }
