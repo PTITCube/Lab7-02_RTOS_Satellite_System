@@ -8,10 +8,14 @@
 #define MAX17048_REG_CRATE  0x16
 #define MAX17048_REG_CMD    0xFE
 
-PTIT_EPS::PTIT_EPS() : lastVoltage(0.0f), lastPercent(0.0f), lastRate(0.0f), sensorReady(false) {
+PTIT_EPS::PTIT_EPS() 
+    : lastVoltage(0.0f), lastPercent(0.0f), lastRate(0.0f), sensorReady(false), buckEnabled(true) {
 }
 
 bool PTIT_EPS::init() {
+    pinMode(EPS_PIN_BUCK_CTRL, OUTPUT);
+    setBuckState(true);
+
     Wire.begin();
     
     // Kiểm tra kết nối tới MAX17048
@@ -75,6 +79,15 @@ float PTIT_EPS::getChargeRate() {
 
 bool PTIT_EPS::isConnected() const {
     return sensorReady;
+}
+
+void PTIT_EPS::setBuckState(bool enable) {
+    buckEnabled = enable;
+    digitalWrite(EPS_PIN_BUCK_CTRL, enable ? EPS_BUCK_POWER_ON : EPS_BUCK_POWER_OFF);
+}
+
+bool PTIT_EPS::getBuckState() const {
+    return buckEnabled;
 }
 
 uint16_t PTIT_EPS::readRegister16(uint8_t reg) {
