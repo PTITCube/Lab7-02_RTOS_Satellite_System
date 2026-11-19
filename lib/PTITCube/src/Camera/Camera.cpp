@@ -96,8 +96,8 @@ bool PTIT_Camera::captureToFile(const char* path) {
     // Dọn dẹp bộ nhớ đệm UART2
     while(Serial2.available()) Serial2.read();
 
-    // 1. Gửi lệnh 'p' đến ESP32-CAM qua UART2
-    Serial2.print("p\n");
+    // 1. Gửi lệnh chụp đến ESP32-CAM qua UART2
+    Serial2.print("capture\n");
     Serial2.flush();
 
     // 2. Chờ ESP32-CAM phản hồi về SIZE
