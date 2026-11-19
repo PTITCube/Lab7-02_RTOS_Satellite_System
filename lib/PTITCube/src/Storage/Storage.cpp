@@ -173,23 +173,24 @@ void PTIT_Storage::listDir(const char *dirname, uint8_t levels) {
     return;
   }
 
-  Serial.println("Storage: Nội dung thư mục: " + String(dirname));
+  Serial.println("Storage: Danh sách: " + String(dirname));
 
   File file = root.openNextFile();
+  int count = 0;
   while (file) {
-    // Thụt lề theo cấp
+    count++;
     for (uint8_t i = 0; i < levels; i++) {
       Serial.print("  ");
     }
 
     if (file.isDirectory()) {
-      Serial.print("  📁 ");
+      Serial.print("  DIR:  ");
       Serial.println(file.name());
       if (levels > 0) {
         listDir(file.path(), levels - 1);
       }
     } else {
-      Serial.print("  📄 ");
+      Serial.print("  FILE: ");
       Serial.print(file.name());
       Serial.print("  (");
       Serial.print(file.size());
@@ -197,6 +198,10 @@ void PTIT_Storage::listDir(const char *dirname, uint8_t levels) {
     }
     file = root.openNextFile();
   }
+  if (count == 0) {
+    Serial.println("  (Thu muc rong)");
+  }
+  root.close();
 }
 
 // ============================================================================
@@ -218,16 +223,46 @@ uint64_t PTIT_Storage::usedBytes() {
 // Hỗ trợ đường dẫn
 // ============================================================================
 String PTIT_Storage::resolvePath(const String &path) {
-  if (path.startsWith("/")) {
-    return path;
+  String p = path;
+  p.trim();
+
+  if (p == "~" || p.length() == 0) {
+    return "/";
   }
-  if (path == ".") {
+
+  if (p == ".") {
     return _currentDir;
   }
-  if (_currentDir.endsWith("/")) {
-    return _currentDir + path;
+
+  if (p == "..") {
+    if (_currentDir == "/") return "/";
+    int lastSlash = _currentDir.lastIndexOf('/');
+    if (lastSlash <= 0) return "/";
+    return _currentDir.substring(0, lastSlash);
   }
-  return _currentDir + "/" + path;
+
+  if (p.startsWith("../")) {
+    String parentDir = "/";
+    if (_currentDir != "/") {
+      int lastSlash = _currentDir.lastIndexOf('/');
+      if (lastSlash > 0) parentDir = _currentDir.substring(0, lastSlash);
+    }
+    String sub = p.substring(3);
+    return (parentDir == "/") ? ("/" + sub) : (parentDir + "/" + sub);
+  }
+
+  if (p.startsWith("./")) {
+    p = p.substring(2);
+  }
+
+  if (p.startsWith("/")) {
+    return p;
+  }
+
+  if (_currentDir == "/") {
+    return "/" + p;
+  }
+  return _currentDir + "/" + p;
 }
 
 // ============================================================================
@@ -239,6 +274,7 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
 
   String cmd = fullCmd;
   cmd.trim();
+  if (cmd.length() == 0) return "";
 
   // Tách lệnh và tham số
   String command = cmd;
@@ -259,64 +295,62 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
 
   // cd <path>
   if (command == "cd") {
-    if (arg1.length() == 0) {
+    if (arg1.length() == 0 || arg1 == "/" || arg1 == "~") {
       _currentDir = "/";
       return "OK: cd /";
     }
 
     String newPath = resolvePath(arg1);
-
-    // Basic dot-dot resolution (only 1 level supported for simplicity in this
-    // context, or just direct assignment)
-    if (arg1 == "..") {
-      if (_currentDir != "/") {
-        int lastSlash = _currentDir.lastIndexOf('/');
-        if (lastSlash <= 0) {
-          _currentDir = "/";
-        } else {
-          _currentDir = _currentDir.substring(0, lastSlash);
-        }
-      }
-      return "OK: cd " + _currentDir;
+    if (newPath == "/") {
+      _currentDir = "/";
+      return "OK: cd /";
     }
 
-    if (exists(newPath.c_str())) {
+    File f = SD.open(newPath.c_str());
+    if (f && f.isDirectory()) {
+      f.close();
       _currentDir = newPath;
       return "OK: cd " + _currentDir;
-    } else {
-      return "ERR: Directory not found";
     }
+    if (f) f.close();
+    return "ERR: Directory not found: " + newPath;
   }
 
   // ls [path]
   if (command == "ls") {
     String path = (arg1.length() > 0) ? resolvePath(arg1) : _currentDir;
-    listDir(path.c_str(), 1);
+    if (path != "/") {
+      File f = SD.open(path.c_str());
+      if (!f) {
+        return "ERR: Path not found: " + path;
+      }
+      if (!f.isDirectory()) {
+        Serial.printf("  FILE: %s (%ld bytes)\n", path.c_str(), f.size());
+        f.close();
+        return "OK: ls " + path;
+      }
+      f.close();
+    }
+    listDir(path.c_str(), 0);
     return "OK: ls " + path;
   }
 
-  // mkdir <path>
-  if (command == "mkdir") {
+  // cat <path>
+  if (command == "cat") {
     if (arg1.length() == 0)
-      return "ERR: mkdir <path>";
+      return "ERR: cat <path>";
     String path = resolvePath(arg1);
-    return createDir(path.c_str()) ? "OK: mkdir " + path : "ERR: mkdir " + path;
-  }
-
-  // rmdir <path>
-  if (command == "rmdir") {
-    if (arg1.length() == 0)
-      return "ERR: rmdir <path>";
-    String path = resolvePath(arg1);
-    return removeDir(path.c_str()) ? "OK: rmdir " + path : "ERR: rmdir " + path;
-  }
-
-  // rm <path>
-  if (command == "rm") {
-    if (arg1.length() == 0)
-      return "ERR: rm <path>";
-    String path = resolvePath(arg1);
-    return removeFile(path.c_str()) ? "OK: rm " + path : "ERR: rm " + path;
+    File f = SD.open(path.c_str());
+    if (!f) {
+      return "ERR: File not found: " + path;
+    }
+    if (f.isDirectory()) {
+      f.close();
+      return "ERR: " + path + " is a directory";
+    }
+    f.close();
+    String content = readFile(path.c_str());
+    return content;
   }
 
   // touch <path>
@@ -325,9 +359,96 @@ String PTIT_Storage::handleCommand(const String &fullCmd) {
       return "ERR: touch <path>";
     String path = resolvePath(arg1);
     if (!exists(path.c_str())) {
-      writeFile(path.c_str(), "");
+      if (!writeFile(path.c_str(), "")) {
+        return "ERR: Cannot create file: " + path;
+      }
     }
     return "OK: touch " + path;
+  }
+
+  // echo <text> [> | >> <file>]
+  if (command == "echo") {
+    int appendPos = arg1.indexOf(">>");
+    int writePos  = arg1.indexOf('>');
+    if (appendPos > 0) {
+      String text = arg1.substring(0, appendPos);
+      text.trim();
+      if ((text.startsWith("\"") && text.endsWith("\"")) || 
+          (text.startsWith("'") && text.endsWith("'"))) {
+        text = text.substring(1, text.length() - 1);
+      }
+      String target = arg1.substring(appendPos + 2);
+      target.trim();
+      String path = resolvePath(target);
+      return appendFile(path.c_str(), (text + "\n").c_str()) ? "OK: append " + path : "ERR: append " + path;
+    } else if (writePos > 0) {
+      String text = arg1.substring(0, writePos);
+      text.trim();
+      if ((text.startsWith("\"") && text.endsWith("\"")) || 
+          (text.startsWith("'") && text.endsWith("'"))) {
+        text = text.substring(1, text.length() - 1);
+      }
+      String target = arg1.substring(writePos + 1);
+      target.trim();
+      String path = resolvePath(target);
+      return writeFile(path.c_str(), (text + "\n").c_str()) ? "OK: write " + path : "ERR: write " + path;
+    }
+    return arg1;
+  }
+
+  // mkdir <path>
+  if (command == "mkdir") {
+    if (arg1.length() == 0)
+      return "ERR: mkdir <path>";
+    String path = resolvePath(arg1);
+    File f = SD.open(path.c_str());
+    if (f) {
+      bool isDir = f.isDirectory();
+      f.close();
+      if (isDir) return "ERR: Directory already exists: " + path;
+      return "ERR: File with same name exists: " + path;
+    }
+    return createDir(path.c_str()) ? "OK: mkdir " + path : "ERR: mkdir " + path;
+  }
+
+  // rmdir <path>
+  if (command == "rmdir") {
+    if (arg1.length() == 0)
+      return "ERR: rmdir <path>";
+    String path = resolvePath(arg1);
+    if (path == "/")
+      return "ERR: Cannot remove root directory";
+    return removeDir(path.c_str()) ? "OK: rmdir " + path : "ERR: rmdir " + path;
+  }
+
+  // rm <path>
+  if (command == "rm") {
+    if (arg1.length() == 0)
+      return "ERR: rm <path>";
+    String path = resolvePath(arg1);
+    File f = SD.open(path.c_str());
+    if (f && f.isDirectory()) {
+      f.close();
+      return "ERR: " + path + " is a directory (use rmdir)";
+    }
+    if (f) f.close();
+    return removeFile(path.c_str()) ? "OK: rm " + path : "ERR: rm " + path;
+  }
+
+  // df
+  if (command == "df") {
+    uint64_t totalMB = totalBytes() / (1024 * 1024);
+    uint64_t usedMB  = usedBytes() / (1024 * 1024);
+    uint64_t freeMB  = (totalMB > usedMB) ? (totalMB - usedMB) : 0;
+    char buf[100];
+    snprintf(buf, sizeof(buf), "SD Card: Total: %llu MB | Used: %llu MB | Free: %llu MB",
+             totalMB, usedMB, freeMB);
+    return String(buf);
+  }
+
+  // help
+  if (command == "help" || command == "?") {
+    return "Commands: pwd, cd <dir>, ls [dir], cat <file>, touch <file>, echo <text> [> file], mkdir <dir>, rmdir <dir>, rm <file>, df, help";
   }
 
   // Lệnh không nhận diện → trả về chuỗi rỗng

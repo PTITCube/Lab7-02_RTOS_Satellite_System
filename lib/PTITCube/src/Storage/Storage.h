@@ -60,15 +60,19 @@ public:
      * Trả về chuỗi kết quả để gửi lại trạm mặt đất.
      *
      * Lệnh hỗ trợ:
-     *   pwd                 — In đường dẫn hiện tại
-     *   cd <path>           — Đổi thư mục hiện tại
-     *   ls [path]           — Liệt kê thư mục
-     *   mkdir <path>        — Tạo thư mục
-     *   rmdir <path>        — Xóa thư mục rỗng
-     *   rm <path>           — Xóa file
-     *   touch <path>        — Tạo file rỗng
+     *   pwd                      — In đường dẫn hiện tại
+     *   cd <path>                — Đổi thư mục hiện tại (hỗ trợ .., /, đường dẫn tương đối)
+     *   ls [path]                — Liệt kê file và thư mục
+     *   cat <path>               — Xem nội dung file văn bản
+     *   touch <path>             — Tạo file mới rỗng
+     *   echo <text> [> file]     — Ghi/ghi thêm nội dung vào file
+     *   mkdir <path>             — Tạo thư mục
+     *   rmdir <path>             — Xóa thư mục rỗng
+     *   rm <path>                — Xóa file
+     *   df                       — Xem dung lượng thẻ nhớ
+     *   help                     — Xem danh sách lệnh trợ giúp
      *
-     * @param cmd Lệnh đầy đủ (VD: "ls /logs")
+     * @param cmd Lệnh đầy đủ (VD: "ls /logs", "cat /datalog.txt")
      * @return Chuỗi kết quả. Rỗng nếu lệnh không được nhận diện.
      */
     String handleCommand(const String& cmd);
