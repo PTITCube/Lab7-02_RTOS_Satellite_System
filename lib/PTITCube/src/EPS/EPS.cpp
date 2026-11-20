@@ -12,8 +12,9 @@ PTIT_EPS::PTIT_EPS()
     : lastVoltage(0.0f), lastPercent(0.0f), lastRate(0.0f), sensorReady(false), buckEnabled(true) {
 }
 
+static bool s_buckEnabled = true;
+
 bool PTIT_EPS::init() {
-    pinMode(EPS_PIN_BUCK_CTRL, OUTPUT);
     setBuckState(true);
 
     Wire.begin();
@@ -82,12 +83,16 @@ bool PTIT_EPS::isConnected() const {
 }
 
 void PTIT_EPS::setBuckState(bool enable) {
-    buckEnabled = enable;
+    s_buckEnabled = enable;
+    pinMode(EPS_PIN_BUCK_CTRL, OUTPUT);
     digitalWrite(EPS_PIN_BUCK_CTRL, enable ? EPS_BUCK_POWER_ON : EPS_BUCK_POWER_OFF);
+    if (enable) {
+        delay(50); // Chờ điện áp hạ áp ổn định
+    }
 }
 
-bool PTIT_EPS::getBuckState() const {
-    return buckEnabled;
+bool PTIT_EPS::getBuckState() {
+    return s_buckEnabled;
 }
 
 uint16_t PTIT_EPS::readRegister16(uint8_t reg) {

@@ -33,9 +33,9 @@ public:
     bool isConnected() const;
 
     // Điều khiển mạch hạ áp (Buck Converter / Power Gating qua GPIO 4)
-    void setBuckState(bool enable);
-    void setBuckConverterState(bool enable) { setBuckState(enable); }
-    bool getBuckState() const;
+    static void setBuckState(bool enable);
+    static void setBuckConverterState(bool enable) { setBuckState(enable); }
+    static bool getBuckState();
 
 private:
     float lastVoltage;

@@ -1,13 +1,12 @@
 #include "Sensor.h"
+#include "../EPS/EPS.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <math.h>
 
 void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
-    // Kích hoạt GPIO 4 mức 1 để cấp dòng vào hạ áp nuôi cảm biến
-    pinMode(4, OUTPUT);
-    digitalWrite(4, HIGH);
-    delay(50); // Chờ nguồn cảm biến ổn định
+    // Kích hoạt hạ áp nuôi cảm biến thông qua thư viện EPS
+    PTIT_EPS::setBuckState(true);
 
     Wire.begin(21, 22);
 
