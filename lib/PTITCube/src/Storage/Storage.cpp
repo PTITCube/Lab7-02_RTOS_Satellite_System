@@ -1,4 +1,5 @@
 #include "Storage.h"
+#include "../EPS/EPS.h"
 #include <SD.h>
 #include <SPI.h>
 
@@ -11,6 +12,7 @@
 // Khởi tạo
 // ============================================================================
 void PTIT_Storage::init() {
+  PTIT_EPS::setBuckState(true);
   SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
 
   if (!SD.begin(SD_CS_PIN, SPI, 8000000)) {

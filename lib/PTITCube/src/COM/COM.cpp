@@ -1,4 +1,5 @@
 #include "COM.h"
+#include "../EPS/EPS.h"
 
 #ifndef LORA_AUX_PIN
 #define LORA_AUX_PIN 27
@@ -26,6 +27,8 @@ PTIT_COM::PTIT_COM() {
 }
 
 void PTIT_COM::init() {
+    PTIT_EPS::setBuckState(true);
+
     pinMode(_m0Pin, OUTPUT);
     pinMode(_m1Pin, OUTPUT);
     pinMode(_auxPin, INPUT);

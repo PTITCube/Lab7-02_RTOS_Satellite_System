@@ -1,10 +1,13 @@
 #include "GPS.h"
+#include "../EPS/EPS.h"
 
 PTIT_GPS::PTIT_GPS() : gpsSerial(Serial2), gpsSelectPin(12), camSelectPin(14), bufferIndex(0) {
     nmeaBuffer[0] = '\0';
 }
 
 void PTIT_GPS::init(uint8_t gpsSelectPin, uint8_t camSelectPin) {
+    PTIT_EPS::setBuckState(true);
+
     this->gpsSelectPin = gpsSelectPin;
     this->camSelectPin = camSelectPin;
 

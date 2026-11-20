@@ -12,7 +12,7 @@ PTIT_EPS::PTIT_EPS()
     : lastVoltage(0.0f), lastPercent(0.0f), lastRate(0.0f), sensorReady(false), buckEnabled(true) {
 }
 
-static bool s_buckEnabled = true;
+static bool s_buckEnabled = false;
 
 bool PTIT_EPS::init() {
     setBuckState(true);
@@ -83,6 +83,7 @@ bool PTIT_EPS::isConnected() const {
 }
 
 void PTIT_EPS::setBuckState(bool enable) {
+    if (s_buckEnabled == enable) return;
     s_buckEnabled = enable;
     pinMode(EPS_PIN_BUCK_CTRL, OUTPUT);
     digitalWrite(EPS_PIN_BUCK_CTRL, enable ? EPS_BUCK_POWER_ON : EPS_BUCK_POWER_OFF);

@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include "../EPS/EPS.h"
 #include <SD.h>
 #include <SPI.h>
 
@@ -32,6 +33,8 @@ bool PTIT_Camera::initializeSd() {
 }
 
 bool PTIT_Camera::init(uint8_t gpsSelectPin, uint8_t camSelectPin) {
+    PTIT_EPS::setBuckState(true);
+
     this->gpsSelectPin = gpsSelectPin;
     this->camSelectPin = camSelectPin;
 
