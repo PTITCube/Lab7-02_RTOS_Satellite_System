@@ -25,28 +25,21 @@ PTIT_Scheduler scheduler;
 
 // Task 1: Thu thập dữ liệu cảm biến I2C & GPS UART2 (Core 1)
 void sensorTask() {
-    if (PTIT_Scheduler::lock(PTIT_BUS_I2C)) {
-        sensor.update();
-        PTIT_Scheduler::unlock(PTIT_BUS_I2C);
-    }
+    sensor.update();
     gps.update();
 }
 
 // Task 2: Nhận và phản hồi lệnh từ trạm mặt đất qua LoRa (Core 0)
 void comTask() {
-    if (PTIT_Scheduler::lock(PTIT_BUS_LORA)) {
-        String cmd = com.update();
-        PTIT_Scheduler::unlock(PTIT_BUS_LORA);
-
-        if (cmd.length() > 0) {
-            cmd.trim();
-            if (cmd == "ping") {
-                com.sendMessage("pong");
-            } else if (cmd == "capture") {
-                camera.capture();
-            } else if (cmd == "reboot") {
-                ESP.restart();
-            }
+    String cmd = com.update();
+    if (cmd.length() > 0) {
+        cmd.trim();
+        if (cmd == "ping") {
+            com.sendMessage("pong");
+        } else if (cmd == "capture") {
+            camera.capture();
+        } else if (cmd == "reboot") {
+            ESP.restart();
         }
     }
 }
@@ -72,15 +65,8 @@ void telemetryTask() {
 
     cdh.printf("TELEM: %s\n", telem.c_str());
 
-    if (PTIT_Scheduler::lock(PTIT_BUS_SPI)) {
-        storage.logData(telem.c_str());
-        PTIT_Scheduler::unlock(PTIT_BUS_SPI);
-    }
-
-    if (PTIT_Scheduler::lock(PTIT_BUS_LORA)) {
-        com.sendMessage(telem);
-        PTIT_Scheduler::unlock(PTIT_BUS_LORA);
-    }
+    storage.logData(telem.c_str());
+    com.sendMessage(telem);
 }
 
 void setup() {
