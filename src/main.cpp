@@ -222,7 +222,7 @@ void telemetryLoop() {
 // 3. SETUP - Khởi tạo phân hệ + đăng ký task
 // ============================================================================
 void setup() {
-    cdh.begin(115200);
+    cdh.begin();
     while (!cdh) { delay(10); }
 
     // Khởi tạo các phân hệ
