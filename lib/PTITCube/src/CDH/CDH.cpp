@@ -91,3 +91,14 @@ void PTIT_CDH::publishData(const char* topic, const char* payload) {
         mqttClient.publish(topic, payload);
     }
 }
+
+String PTIT_CDH::extractCommand(const String& cmd) {
+    String command = cmd;
+    command.trim();
+    int sp1 = command.indexOf(' ');
+    if (sp1 > 0) {
+        command = command.substring(0, sp1);
+    }
+    command.toLowerCase();
+    return command;
+}

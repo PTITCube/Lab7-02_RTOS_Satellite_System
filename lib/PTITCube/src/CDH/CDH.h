@@ -30,6 +30,7 @@ public:
                bool invert = false, unsigned long timeout_ms = 20000UL, uint8_t rxfifo_full_thrhd = 112);
     void end();
     operator bool() const;
+    String extractCommand(const String& cmd);
 
     // Stream interface
     int available() override;
