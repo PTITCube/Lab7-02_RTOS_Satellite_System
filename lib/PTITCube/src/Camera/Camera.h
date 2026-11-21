@@ -18,9 +18,9 @@ public:
     PTIT_Camera();
     
     // Khởi tạo camera. 
-    // gpsSelectPin và camSelectPin là các chân điều khiển Multiplexer (MUX).
+    // Mặc định sử dụng chân điều khiển Multiplexer 74HC4066 trên vệ tinh (GPS pin 12, CAM pin 14).
     // Truyền 255 nếu nối trực tiếp không qua MUX.
-    bool init(uint8_t gpsSelectPin = 255, uint8_t camSelectPin = 255);
+    bool init(uint8_t gpsSelectPin = 12, uint8_t camSelectPin = 14);
     
     // Gửi tín hiệu điều khiển MUX để kết nối UART2 với mạch Camera
     void selectCamera();

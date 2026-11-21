@@ -232,7 +232,7 @@ void setup() {
     eps.init();
     storage.init();
     cdh.init();
-    camera.init(12, 14);
+    camera.init();
 
     // Cấu hình LoRa
     lora.setChannel(23);
