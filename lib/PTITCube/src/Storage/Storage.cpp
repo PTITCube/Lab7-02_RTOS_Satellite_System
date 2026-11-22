@@ -17,7 +17,7 @@ void PTIT_Storage::init() {
   SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
 
   if (!SD.begin(SD_CS_PIN, SPI, 8000000)) {
-    Serial.println("Storage: MicroSD mount failed");
+    Serial.println("Storage: SD mount failed");
     sdReady = false;
   } else {
     sdReady = true;
@@ -141,17 +141,17 @@ bool PTIT_Storage::removeDir(const char *path) {
 
 void PTIT_Storage::listDir(const char *dirname, uint8_t levels) {
   if (!sdReady) {
-    Serial.println("Storage: Thẻ nhớ chưa sẵn sàng");
+    Serial.println("Storage: SD not ready");
     return;
   }
 
   File root = SD.open(dirname);
   if (!root || !root.isDirectory()) {
-    Serial.println("Storage: Không thể mở thư mục: " + String(dirname));
+    Serial.println("Storage: Open dir failed: " + String(dirname));
     return;
   }
 
-  Serial.println("Storage: Danh sách: " + String(dirname));
+  Serial.println("Storage: List: " + String(dirname));
 
   File file = root.openNextFile();
   int count = 0;
@@ -177,7 +177,7 @@ void PTIT_Storage::listDir(const char *dirname, uint8_t levels) {
     file = root.openNextFile();
   }
   if (count == 0) {
-    Serial.println("  (Thu muc rong)");
+    Serial.println("  (Empty)");
   }
   root.close();
 }
