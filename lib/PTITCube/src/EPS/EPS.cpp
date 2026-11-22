@@ -13,8 +13,10 @@ PTIT_EPS::PTIT_EPS()
 }
 
 static bool s_buckEnabled = false;
+static bool s_buckInitialized = false;
 
 bool PTIT_EPS::init() {
+    // Mặc định cấp dòng cho buck khi khởi tạo EPS (Mức 0: LOW)
     setBuckState(true);
 
     Wire.begin();
@@ -83,7 +85,8 @@ bool PTIT_EPS::isConnected() const {
 }
 
 void PTIT_EPS::setBuckState(bool enable) {
-    if (s_buckEnabled == enable) return;
+    if (s_buckInitialized && s_buckEnabled == enable) return;
+    s_buckInitialized = true;
     s_buckEnabled = enable;
     pinMode(EPS_PIN_BUCK_CTRL, OUTPUT);
     digitalWrite(EPS_PIN_BUCK_CTRL, enable ? EPS_BUCK_POWER_ON : EPS_BUCK_POWER_OFF);
@@ -99,10 +102,10 @@ bool PTIT_EPS::getBuckState() {
 uint16_t PTIT_EPS::readRegister16(uint8_t reg) {
     Wire.beginTransmission(MAX17048_I2C_ADDR);
     Wire.write(reg);
-    if (Wire.endTransmission(false) != 0) {
-        return 0;
-    }
-    if (Wire.requestFrom((uint8_t)MAX17048_I2C_ADDR, (uint8_t)2) == 2) {
+    Wire.endTransmission(false);
+    
+    Wire.requestFrom((uint8_t)MAX17048_I2C_ADDR, (uint8_t)2);
+    if (Wire.available() >= 2) {
         uint8_t msb = Wire.read();
         uint8_t lsb = Wire.read();
         return ((uint16_t)msb << 8) | lsb;
@@ -110,10 +113,10 @@ uint16_t PTIT_EPS::readRegister16(uint8_t reg) {
     return 0;
 }
 
-bool PTIT_EPS::writeRegister16(uint8_t reg, uint16_t value) {
+void PTIT_EPS::writeRegister16(uint8_t reg, uint16_t value) {
     Wire.beginTransmission(MAX17048_I2C_ADDR);
     Wire.write(reg);
     Wire.write((uint8_t)(value >> 8));
     Wire.write((uint8_t)(value & 0xFF));
-    return (Wire.endTransmission() == 0);
+    Wire.endTransmission();
 }
