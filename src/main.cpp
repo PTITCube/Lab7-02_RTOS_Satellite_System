@@ -22,6 +22,7 @@ const float PERCENT_LOW_THRES   = 20.0; // %
 const float PERCENT_HIGH_THRES  = 25.0; // %
 bool isPowerSaving = false;
 bool isTelemetryPaused = false;
+unsigned long lastCmdTime = 0;
 
 // Task 1: Cảm biến I2C (Core 1 - Vô hiệu hóa khi ở Power Saving)
 void sensorTask() {
@@ -72,6 +73,9 @@ bool capturePhotoToSD() {
 // Xử lý lệnh từ trạm mặt đất (HEPTA-SAT 'a'..'f' + LMS System Commands)
 void processCommand(const String& cmdStr) {
     if (cmdStr.length() == 0) return;
+    lastCmdTime = millis(); // Cập nhật thời điểm nhận lệnh để hoãn Telemetry
+    delay(80); // Transceiver RX-switching guard time
+
     char c = cmdStr.charAt(0);
     scheduler.println("Received command: " + cmdStr);
 
@@ -83,7 +87,7 @@ void processCommand(const String& cmdStr) {
                         com.sendMessage("ACK " + String(i + 1) + "/4");
                         scheduler.unlock(PTIT_BUS_LORA);
                     }
-                    delay(200);
+                    delay(250);
                 }
                 return;
             case 'b':
@@ -185,20 +189,31 @@ void processCommand(const String& cmdStr) {
 
 // Task 3: Nhận lệnh LoRa (Core 0)
 void comTask() {
-    String cmd = "";
+    String raw = "";
     if (scheduler.lock(PTIT_BUS_LORA)) {
-        cmd = com.update();
+        raw = com.update();
         scheduler.unlock(PTIT_BUS_LORA);
     }
-    if (cmd.length() > 0) {
-        cmd.trim();
-        processCommand(cmd);
+    if (raw.length() > 0) {
+        // Lọc bỏ ký tự rác nhị phân
+        String clean = "";
+        for (unsigned int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (c >= 32 && c <= 126) clean += c;
+        }
+        clean.trim();
+        if (clean.length() > 0) {
+            processCommand(clean);
+        }
     }
 }
 
 // Task 4: Viễn trắc HK theo từng chunk (Core 0)
 void telemetryTask() {
     if (isTelemetryPaused) return;
+
+    // Nếu vừa có lệnh từ mặt đất trong vòng 3 giây trước, hoãn telemetry để nhường kênh vô tuyến
+    if (millis() - lastCmdTime < 3000) return;
 
     // Giám sát ngưỡng pin - chỉ thông báo 1 lần khi chuyển trạng thái
     float vbat = eps.getBatteryVoltage();
@@ -241,12 +256,12 @@ void telemetryTask() {
         }
 
         for (int i = 0; i < 6; i++) {
-            if (isTelemetryPaused) break;
+            if (isTelemetryPaused || (millis() - lastCmdTime < 3000)) break;
             if (scheduler.lock(PTIT_BUS_LORA, 200)) {
                 com.sendMessage(payloads[i]);
                 scheduler.unlock(PTIT_BUS_LORA);
             }
-            delay(100);
+            delay(120);
         }
     } else {
         // Chế độ Power Saving: Không ghi SD, cảm biến tắt, chỉ truyền EPS và GPS qua LoRa
@@ -256,7 +271,7 @@ void telemetryTask() {
             com.sendMessage(epsPayload);
             scheduler.unlock(PTIT_BUS_LORA);
         }
-        delay(100);
+        delay(120);
 
         if (gps.hasFix()) {
             String gpsPayload = "{\"valid\":true,\"lat\":" + String(gps.getLatitude(), 4) + ",\"lng\":" + String(gps.getLongitude(), 4) + "}";
@@ -265,7 +280,7 @@ void telemetryTask() {
                 com.sendMessage(gpsPayload);
                 scheduler.unlock(PTIT_BUS_LORA);
             }
-            delay(100);
+            delay(120);
         }
     }
 }
@@ -288,7 +303,7 @@ void setup() {
     scheduler.addTask("Sensor",    sensorTask,    200,  1, 3);
     scheduler.addTask("GPS",       gpsTask,       50,   1, 3);
     scheduler.addTask("COM",       comTask,       100,  0, 2);
-    scheduler.addTask("Telemetry", telemetryTask, 3000, 0, 1);
+    scheduler.addTask("Telemetry", telemetryTask, 4000, 0, 1);
 
     scheduler.enableWatchdog(30);
     scheduler.start();
