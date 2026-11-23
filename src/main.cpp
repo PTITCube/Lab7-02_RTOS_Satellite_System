@@ -15,21 +15,24 @@ PTIT_Storage storage;
 PTIT_COM com;
 PTIT_Scheduler scheduler;
 
-const float BUS_VOLTAGE_TURN_OFF = 3.5;
-const float BUS_VOLTAGE_TURN_ON  = 3.7;
-bool buck_is_on = true;
+// Ngưỡng bảo vệ nguồn & Chế độ tiết kiệm năng lượng
+const float VOLTAGE_LOW_THRES   = 3.5;  // V
+const float VOLTAGE_HIGH_THRES  = 3.7;  // V
+const float PERCENT_LOW_THRES   = 20.0; // %
+const float PERCENT_HIGH_THRES  = 25.0; // %
+bool isPowerSaving = false;
 bool isTelemetryPaused = false;
 
-// Task 1: Cảm biến I2C (Core 1)
+// Task 1: Cảm biến I2C (Core 1 - Vô hiệu hóa khi ở Power Saving)
 void sensorTask() {
-    if (isTelemetryPaused) return;
+    if (isTelemetryPaused || isPowerSaving) return;
     if (scheduler.lock(PTIT_BUS_I2C)) {
         sensor.update();
         scheduler.unlock(PTIT_BUS_I2C);
     }
 }
 
-// Task 2: Định vị GPS UART2 (Core 1)
+// Task 2: Định vị GPS UART2 (Core 1 - Luôn duy trì qua MUX)
 void gpsTask() {
     if (isTelemetryPaused) return;
     if (scheduler.lock(PTIT_BUS_UART2, 50)) {
@@ -41,6 +44,10 @@ void gpsTask() {
 
 // Chụp ảnh bằng ESP32-CAM và lưu vào thẻ SD
 bool capturePhotoToSD() {
+    if (isPowerSaving) {
+        scheduler.println("ERR: Camera disabled in power saving mode!");
+        return false;
+    }
     if (!scheduler.lock(PTIT_BUS_UART2, 1000)) return false;
     if (!scheduler.lock(PTIT_BUS_SPI, 1000)) {
         scheduler.unlock(PTIT_BUS_UART2);
@@ -80,6 +87,10 @@ void processCommand(const String& cmdStr) {
                 }
                 return;
             case 'b':
+                if (isPowerSaving) {
+                    if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("ERR: Storage disabled in power saving mode"); scheduler.unlock(PTIT_BUS_LORA); }
+                    return;
+                }
                 if (scheduler.lock(PTIT_BUS_SPI, 500)) {
                     storage.writeFile("/voltage.txt", "");
                     for (uint8_t i = 0; i < 5; i++) {
@@ -96,12 +107,20 @@ void processCommand(const String& cmdStr) {
                 }
                 return;
             case 'c': {
+                if (isPowerSaving) {
+                    if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("ERR: Sensors disabled in power saving mode"); scheduler.unlock(PTIT_BUS_LORA); }
+                    return;
+                }
                 String msg = "Acceleration: ax=" + String(sensor.getAccX(), 2) + ", ay=" + String(sensor.getAccY(), 2) + ", az=" + String(sensor.getAccZ(), 2) + " m/s^2";
                 scheduler.println(msg);
                 if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage(msg); scheduler.unlock(PTIT_BUS_LORA); }
                 return;
             }
             case 'd': {
+                if (isPowerSaving) {
+                    if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("ERR: Sensors disabled in power saving mode"); scheduler.unlock(PTIT_BUS_LORA); }
+                    return;
+                }
                 String msg = "Gyroscope: gx=" + String(sensor.getGyroX(), 2) + ", gy=" + String(sensor.getGyroY(), 2) + ", gz=" + String(sensor.getGyroZ(), 2) + " rad/s";
                 scheduler.println(msg);
                 if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage(msg); scheduler.unlock(PTIT_BUS_LORA); }
@@ -135,12 +154,13 @@ void processCommand(const String& cmdStr) {
         delay(500);
         ESP.restart();
     } else if (cmdStr == "status") {
-        resp = "STATUS: Up " + String(millis() / 1000) + "s, Bat=" + String(eps.getBatteryVoltage(), 1) + "V, SD=" + (storage.isReady() ? "OK" : "ERR") + (isTelemetryPaused ? " (PAUSED)" : " (ACTIVE)");
+        resp = "STATUS: Up " + String(millis() / 1000) + "s, Bat=" + String(eps.getBatteryVoltage(), 1) + "V, SD=" + (storage.isReady() ? "OK" : "ERR") + (isTelemetryPaused ? " (PAUSED)" : isPowerSaving ? " (PWR_SAVE)" : " (ACTIVE)");
     } else if (cmdStr == "uptime") {
         unsigned long sec = millis() / 1000;
         resp = "Uptime: " + String(sec / 3600) + "h " + String((sec / 60) % 60) + "m " + String(sec % 60) + "s";
     } else if (cmdStr == "get_sensor") {
-        resp = "Sensor: Temp=" + String(sensor.getTemperature(), 2) + "C, Press=" + String(sensor.getPressure(), 2) + "hPa";
+        if (isPowerSaving) resp = "ERR: Sensors disabled in power saving mode";
+        else resp = "Sensor: Temp=" + String(sensor.getTemperature(), 2) + "C, Press=" + String(sensor.getPressure(), 2) + "hPa";
     } else if (cmdStr == "get_eps") {
         resp = "EPS: Battery=" + String(eps.getBatteryVoltage(), 2) + "V";
     } else if (cmdStr == "get_gps") {
@@ -180,48 +200,73 @@ void comTask() {
 void telemetryTask() {
     if (isTelemetryPaused) return;
 
-    // Giám sát nguồn Hysteresis
-    float bus_v = eps.getBatteryVoltage();
-    if (buck_is_on && bus_v < BUS_VOLTAGE_TURN_OFF) {
-        scheduler.println("Bus voltage is low! Switching off Buck converter to save power.");
+    // Giám sát ngưỡng pin - chỉ thông báo 1 lần khi chuyển trạng thái
+    float vbat = eps.getBatteryVoltage();
+    float pct  = eps.getBatteryPercentage();
+
+    if (!isPowerSaving && (vbat < VOLTAGE_LOW_THRES || pct < PERCENT_LOW_THRES)) {
+        isPowerSaving = true;
         eps.setBuckState(false);
-        buck_is_on = false;
-    } else if (!buck_is_on && bus_v > BUS_VOLTAGE_TURN_ON) {
-        scheduler.println("Bus voltage recovered. Switching on Buck converter.");
+        scheduler.println("Power saving mode ENABLED (Low battery). Sensors, camera and storage disabled.");
+        com.sendMessage("ALERT: Power saving mode ENABLED");
+    } else if (isPowerSaving && vbat > VOLTAGE_HIGH_THRES && pct > PERCENT_HIGH_THRES) {
+        isPowerSaving = false;
         eps.setBuckState(true);
-        buck_is_on = true;
+        scheduler.println("Power saving mode DISABLED (Battery recovered). All subsystems active.");
+        com.sendMessage("ALERT: Power saving mode DISABLED");
     }
 
-    // 6 Chunks chuẩn cho LMS và LoRa (< 58 bytes)
-    String payloads[6];
-    const char* labels[] = {"EPS", "Env", "Acc", "Gyro", "Mag", "GPS"};
+    if (!isPowerSaving) {
+        // Chế độ thông thường: 6 Chunks đầy đủ + ghi thẻ nhớ SD
+        String payloads[6];
+        const char* labels[] = {"EPS", "Env", "Acc", "Gyro", "Mag", "GPS"};
 
-    payloads[0] = "{\"battery_v\":" + String(eps.getBatteryVoltage(), 2) + "}";
-    payloads[1] = "{\"temp\":" + String(sensor.getTemperature(), 2) + ",\"pressure\":" + String(sensor.getPressure(), 2) + "}";
-    payloads[2] = "{\"acc_x\":" + String(sensor.getAccX(), 2) + ",\"acc_y\":" + String(sensor.getAccY(), 2) + ",\"acc_z\":" + String(sensor.getAccZ(), 2) + "}";
-    payloads[3] = "{\"gyro_x\":" + String(sensor.getGyroX(), 2) + ",\"gyro_y\":" + String(sensor.getGyroY(), 2) + ",\"gyro_z\":" + String(sensor.getGyroZ(), 2) + "}";
-    payloads[4] = "{\"mag_x\":" + String(sensor.getMagX(), 2) + ",\"mag_y\":" + String(sensor.getMagY(), 2) + ",\"mag_z\":" + String(sensor.getMagZ(), 2) + "}";
-    payloads[5] = gps.hasFix() ? ("{\"valid\":true,\"lat\":" + String(gps.getLatitude(), 4) + ",\"lng\":" + String(gps.getLongitude(), 4) + "}") : "{\"valid\":false,\"lat\":null,\"lng\":null}";
+        payloads[0] = "{\"battery_v\":" + String(eps.getBatteryVoltage(), 2) + "}";
+        payloads[1] = "{\"temp\":" + String(sensor.getTemperature(), 2) + ",\"pressure\":" + String(sensor.getPressure(), 2) + "}";
+        payloads[2] = "{\"acc_x\":" + String(sensor.getAccX(), 2) + ",\"acc_y\":" + String(sensor.getAccY(), 2) + ",\"acc_z\":" + String(sensor.getAccZ(), 2) + "}";
+        payloads[3] = "{\"gyro_x\":" + String(sensor.getGyroX(), 2) + ",\"gyro_y\":" + String(sensor.getGyroY(), 2) + ",\"gyro_z\":" + String(sensor.getGyroZ(), 2) + "}";
+        payloads[4] = "{\"mag_x\":" + String(sensor.getMagX(), 2) + ",\"mag_y\":" + String(sensor.getMagY(), 2) + ",\"mag_z\":" + String(sensor.getMagZ(), 2) + "}";
+        payloads[5] = gps.hasFix() ? ("{\"valid\":true,\"lat\":" + String(gps.getLatitude(), 4) + ",\"lng\":" + String(gps.getLongitude(), 4) + "}") : "{\"valid\":false,\"lat\":null,\"lng\":null}";
 
-    for (int i = 0; i < 6; i++) {
-        scheduler.println(String("[TELEMETRY] ") + labels[i] + ": " + payloads[i]);
-    }
+        for (int i = 0; i < 6; i++) {
+            scheduler.println(String("[TELEMETRY] ") + labels[i] + ": " + payloads[i]);
+        }
 
-    if (scheduler.lock(PTIT_BUS_SPI, 200)) {
-        String batch = "";
-        for (int i = 0; i < 6; i++) batch += payloads[i] + "\n";
-        bool saved = storage.appendFile("/datalog.txt", batch.c_str());
-        scheduler.println(saved ? "[SD] telemetry saved" : "[SD] telemetry write failed");
-        scheduler.unlock(PTIT_BUS_SPI);
-    }
+        if (scheduler.lock(PTIT_BUS_SPI, 200)) {
+            String batch = "";
+            for (int i = 0; i < 6; i++) batch += payloads[i] + "\n";
+            bool saved = storage.appendFile("/datalog.txt", batch.c_str());
+            scheduler.println(saved ? "[SD] telemetry saved" : "[SD] telemetry write failed");
+            scheduler.unlock(PTIT_BUS_SPI);
+        }
 
-    for (int i = 0; i < 6; i++) {
-        if (isTelemetryPaused) break;
+        for (int i = 0; i < 6; i++) {
+            if (isTelemetryPaused) break;
+            if (scheduler.lock(PTIT_BUS_LORA, 200)) {
+                com.sendMessage(payloads[i]);
+                scheduler.unlock(PTIT_BUS_LORA);
+            }
+            delay(100);
+        }
+    } else {
+        // Chế độ Power Saving: Không ghi SD, cảm biến tắt, chỉ truyền EPS và GPS qua LoRa
+        String epsPayload = "{\"battery_v\":" + String(eps.getBatteryVoltage(), 2) + ",\"pwr_save\":true}";
+        scheduler.println("[TELEMETRY] EPS: " + epsPayload);
         if (scheduler.lock(PTIT_BUS_LORA, 200)) {
-            com.sendMessage(payloads[i]);
+            com.sendMessage(epsPayload);
             scheduler.unlock(PTIT_BUS_LORA);
         }
         delay(100);
+
+        if (gps.hasFix()) {
+            String gpsPayload = "{\"valid\":true,\"lat\":" + String(gps.getLatitude(), 4) + ",\"lng\":" + String(gps.getLongitude(), 4) + "}";
+            scheduler.println("[TELEMETRY] GPS: " + gpsPayload);
+            if (scheduler.lock(PTIT_BUS_LORA, 200)) {
+                com.sendMessage(gpsPayload);
+                scheduler.unlock(PTIT_BUS_LORA);
+            }
+            delay(100);
+        }
     }
 }
 
