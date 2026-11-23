@@ -7,17 +7,23 @@
 static WiFiClientSecure espClient;
 static PubSubClient mqttClient(espClient);
 
-PTIT_CDH::PTIT_CDH(HardwareSerial& serial) : _serial(serial) {
+PTIT_CDH::PTIT_CDH(PTIT_ConsoleSerial& serial) : _serial(serial) {
 }
 
 void PTIT_CDH::begin(unsigned long baud) {
     _serial.begin(baud);
 }
 
+#if ARDUINO_USB_CDC_ON_BOOT
+void PTIT_CDH::begin(unsigned long baud, uint32_t, int8_t, int8_t, bool, unsigned long, uint8_t) {
+    _serial.begin(baud); // USB CDC: no UART frame or pin configuration.
+}
+#else
 void PTIT_CDH::begin(unsigned long baud, uint32_t config, int8_t rxPin, int8_t txPin, 
                      bool invert, unsigned long timeout_ms, uint8_t rxfifo_full_thrhd) {
     _serial.begin(baud, config, rxPin, txPin, invert, timeout_ms, rxfifo_full_thrhd);
 }
+#endif
 
 void PTIT_CDH::end() {
     _serial.end();
@@ -58,9 +64,11 @@ void PTIT_CDH::init() {
     _serial.println("[CDH] Initializing WiFi & MQTT...");
 
     WiFiManager wm;
+    wm.setConnectTimeout(10);
+    wm.setConfigPortalTimeout(30);
     // Set fallback AP if no WiFi
     if (!wm.autoConnect("CubeSat_AP", "12345678")) {
-        _serial.println("[CDH] Failed to connect WiFi, running AP mode");
+        _serial.println("[CDH] WiFi setup timed out; continuing offline");
     } else {
         _serial.println("[CDH] WiFi Connected!");
     }
@@ -101,4 +109,39 @@ String PTIT_CDH::extractCommand(const String& cmd) {
     }
     command.toLowerCase();
     return command;
+}
+
+// ==========================================
+// Watchdog Timer (WDT) Implementation
+// ==========================================
+bool PTIT_CDH::wdtInit(uint32_t timeoutSec, bool panic) {
+    return (esp_task_wdt_init(timeoutSec, panic) == ESP_OK);
+}
+
+void PTIT_CDH::wdtAdd() {
+    esp_task_wdt_add(NULL);
+}
+
+void PTIT_CDH::wdtFeed() {
+    esp_task_wdt_reset();
+}
+
+void PTIT_CDH::wdtReset() {
+    esp_task_wdt_reset();
+}
+
+bool PTIT_CDH::wasWatchdogReset() {
+    return (esp_reset_reason() == ESP_RST_TASK_WDT);
+}
+
+// ==========================================
+// FreeRTOS Task & Delay Implementation
+// ==========================================
+bool PTIT_CDH::createTask(TaskFunction_t taskFn, const char* name, uint32_t stackSize, 
+                          UBaseType_t priority, BaseType_t core, void* param) {
+    return (xTaskCreatePinnedToCore(taskFn, name, stackSize, param, priority, NULL, core) == pdPASS);
+}
+
+void PTIT_CDH::delayMs(uint32_t ms) {
+    vTaskDelay(pdMS_TO_TICKS(ms));
 }
