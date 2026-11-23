@@ -164,6 +164,18 @@ void processCommand(const String& cmdStr) {
                 if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage(msg); scheduler.unlock(PTIT_BUS_LORA); }
                 return;
             }
+            case 'p': {
+                isTelemetryPaused = true;
+                scheduler.println("Telemetry PAUSED");
+                if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("Telemetry PAUSED"); scheduler.unlock(PTIT_BUS_LORA); }
+                return;
+            }
+            case 'r': {
+                isTelemetryPaused = false;
+                scheduler.println("Telemetry RESUMED");
+                if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("Telemetry RESUMED"); scheduler.unlock(PTIT_BUS_LORA); }
+                return;
+            }
             default: break;
         }
     }
