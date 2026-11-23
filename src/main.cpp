@@ -16,10 +16,8 @@ PTIT_COM com;
 PTIT_Scheduler scheduler;
 
 // Ngưỡng bảo vệ nguồn & Chế độ tiết kiệm năng lượng
-const float VOLTAGE_LOW_THRES   = 3.5;  // V
-const float VOLTAGE_HIGH_THRES  = 3.7;  // V
-const float PERCENT_LOW_THRES   = 20.0; // %
-const float PERCENT_HIGH_THRES  = 25.0; // %
+const float VOLTAGE_THRES = 3.5;  // V
+const float PERCENT_THRES = 20.0; // %
 bool isPowerSaving = false;
 bool isTelemetryPaused = false;
 unsigned long lastCmdTime = 0;
@@ -253,12 +251,12 @@ void telemetryTask() {
     float vbat = eps.getBatteryVoltage();
     float pct  = eps.getBatteryPercentage();
 
-    if (!isPowerSaving && (vbat < VOLTAGE_LOW_THRES || pct < PERCENT_LOW_THRES)) {
+    if (!isPowerSaving && (vbat < VOLTAGE_THRES || pct < PERCENT_THRES)) {
         isPowerSaving = true;
         eps.setBuckState(false);
         scheduler.println("Power saving mode ENABLED (Low battery). Sensors and camera disabled.");
         com.sendMessage("ALERT: Power saving mode ENABLED");
-    } else if (isPowerSaving && vbat > VOLTAGE_HIGH_THRES && pct > PERCENT_HIGH_THRES) {
+    } else if (isPowerSaving && vbat >= VOLTAGE_THRES && pct >= PERCENT_THRES) {
         isPowerSaving = false;
         eps.setBuckState(true);
         scheduler.println("Power saving mode DISABLED (Battery recovered). All subsystems active.");
