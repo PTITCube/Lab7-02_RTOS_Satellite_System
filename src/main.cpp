@@ -20,8 +20,6 @@ const float VOLTAGE_THRES = 3.5;  // V
 const float PERCENT_THRES = 20.0; // %
 bool isPowerSaving = false;
 bool isTelemetryPaused = false;
-float lastBatteryV = 0.0f;
-float lastBatteryPct = 0.0f;
 unsigned long lastCmdTime = 0;
 
 // Task 1: Cảm biến I2C (Core 1 - Vô hiệu hóa khi ở Power Saving)
@@ -96,30 +94,15 @@ void processCommand(const String& cmdStr) {
                     com.sendMessage("Saving battery data to SD card...");
                     scheduler.unlock(PTIT_BUS_LORA);
                 }
-                bool wasPowerSaving = isPowerSaving;
-                if (wasPowerSaving) {
-                    if (scheduler.lock(PTIT_BUS_I2C, 200)) {
-                        eps.setBuckState(true);
-                        delay(60);
-                        Wire.begin();
-                        scheduler.unlock(PTIT_BUS_I2C);
-                    }
-                }
                 if (scheduler.lock(PTIT_BUS_SPI, 500)) {
                     storage.writeFile("/voltage.txt", "");
                     for (uint8_t i = 0; i < 5; i++) {
-                        if (scheduler.lock(PTIT_BUS_I2C, 200)) {
-                            eps.update();
-                            scheduler.unlock(PTIT_BUS_I2C);
-                        }
+                        eps.update();
                         float v = eps.getBatteryVoltage();
                         float pct = eps.getBatteryPercentage();
                         String line = "[" + String(i + 1) + "/5] Bat: " + String(v, 2) + "V, " + String(pct, 1) + "%";
                         storage.appendFile("/voltage.txt", (line + "\r\n").c_str());
                         delay(200);
-                    }
-                    if (wasPowerSaving) {
-                        eps.setBuckState(false);
                     }
                     String data = storage.readFile("/voltage.txt");
                     scheduler.unlock(PTIT_BUS_SPI);
@@ -207,7 +190,7 @@ void processCommand(const String& cmdStr) {
         delay(500);
         ESP.restart();
     } else if (cmdStr == "status") {
-        resp = "STATUS: Up " + String(millis() / 1000) + "s, Bat=" + String(lastBatteryV, 1) + "V, SD=" + (storage.isReady() ? "OK" : "ERR") + (isTelemetryPaused ? " (PAUSED)" : isPowerSaving ? " (PWR_SAVE)" : " (ACTIVE)");
+        resp = "STATUS: Up " + String(millis() / 1000) + "s, Bat=" + String(eps.getBatteryVoltage(), 1) + "V, SD=" + (storage.isReady() ? "OK" : "ERR") + (isTelemetryPaused ? " (PAUSED)" : isPowerSaving ? " (PWR_SAVE)" : " (ACTIVE)");
     } else if (cmdStr == "uptime") {
         unsigned long sec = millis() / 1000;
         resp = "Uptime: " + String(sec / 3600) + "h " + String((sec / 60) % 60) + "m " + String(sec % 60) + "s";
@@ -215,7 +198,7 @@ void processCommand(const String& cmdStr) {
         if (isPowerSaving) resp = "ERR: Sensors disabled in power saving mode";
         else resp = "Sensor: Temp=" + String(sensor.getTemperature(), 2) + "C, Press=" + String(sensor.getPressure(), 2) + "hPa";
     } else if (cmdStr == "get_eps") {
-        resp = "EPS: Battery=" + String(lastBatteryV, 2) + "V";
+        resp = "EPS: Battery=" + String(eps.getBatteryVoltage(), 2) + "V";
     } else if (cmdStr == "get_gps") {
         resp = gps.hasFix() ? ("GPS: Lat=" + String(gps.getLatitude(), 6) + ", Lng=" + String(gps.getLongitude(), 6)) : "GPS: no valid fix";
     } else if (cmdStr == "capture") {
@@ -264,46 +247,20 @@ void telemetryTask() {
     // Nếu vừa có lệnh từ mặt đất trong vòng 3 giây trước, hoãn telemetry để nhường kênh vô tuyến
     if (millis() - lastCmdTime < 3000) return;
 
-    // Giám sát ngưỡng pin - cần nguồn Buck để giao tiếp với MAX17048 qua I2C
-    if (isPowerSaving) {
-        if (scheduler.lock(PTIT_BUS_I2C, 200)) {
-            eps.setBuckState(true);
-            delay(60);
-            Wire.begin();
-            scheduler.unlock(PTIT_BUS_I2C);
-        }
-    }
+    // Giám sát ngưỡng pin - chỉ thông báo 1 lần khi chuyển trạng thái
+    float vbat = eps.getBatteryVoltage();
+    float pct  = eps.getBatteryPercentage();
 
-    float vbat = 0.0f;
-    float pct  = 0.0f;
-    if (scheduler.lock(PTIT_BUS_I2C, 200)) {
-        eps.update();
-        vbat = eps.getBatteryVoltage();
-        pct  = eps.getBatteryPercentage();
-        scheduler.unlock(PTIT_BUS_I2C);
-    }
-
-    if (vbat > 0.5f) {
-        lastBatteryV = vbat;
-        lastBatteryPct = pct;
-
-        if (!isPowerSaving && (vbat < VOLTAGE_THRES || pct < PERCENT_THRES)) {
-            isPowerSaving = true;
-            eps.setBuckState(false);
-            scheduler.println("Power saving mode ENABLED (Low battery). Sensors and camera disabled.");
-            com.sendMessage("ALERT: Power saving mode ENABLED");
-        } else if (isPowerSaving && vbat >= VOLTAGE_THRES && pct >= PERCENT_THRES) {
-            isPowerSaving = false;
-            // Buck đã bật ở trên, duy trì bật
-            scheduler.println("Power saving mode DISABLED (Battery recovered). All subsystems active.");
-            com.sendMessage("ALERT: Power saving mode DISABLED");
-        } else if (isPowerSaving) {
-            eps.setBuckState(false);
-        }
-    } else {
-        if (isPowerSaving) {
-            eps.setBuckState(false);
-        }
+    if (!isPowerSaving && (vbat < VOLTAGE_THRES || pct < PERCENT_THRES)) {
+        isPowerSaving = true;
+        eps.setBuckState(false);
+        scheduler.println("Power saving mode ENABLED (Low battery). Sensors and camera disabled.");
+        com.sendMessage("ALERT: Power saving mode ENABLED");
+    } else if (isPowerSaving && vbat >= VOLTAGE_THRES && pct >= PERCENT_THRES) {
+        isPowerSaving = false;
+        eps.setBuckState(true);
+        scheduler.println("Power saving mode DISABLED (Battery recovered). All subsystems active.");
+        com.sendMessage("ALERT: Power saving mode DISABLED");
     }
 
     if (!isPowerSaving) {
@@ -311,7 +268,7 @@ void telemetryTask() {
         String payloads[6];
         const char* labels[] = {"EPS", "Env", "Acc", "Gyro", "Mag", "GPS"};
 
-        payloads[0] = "{\"battery_v\":" + String(lastBatteryV, 2) + "}";
+        payloads[0] = "{\"battery_v\":" + String(eps.getBatteryVoltage(), 2) + "}";
         payloads[1] = "{\"temp\":" + String(sensor.getTemperature(), 2) + ",\"pressure\":" + String(sensor.getPressure(), 2) + "}";
         payloads[2] = "{\"acc_x\":" + String(sensor.getAccX(), 2) + ",\"acc_y\":" + String(sensor.getAccY(), 2) + ",\"acc_z\":" + String(sensor.getAccZ(), 2) + "}";
         payloads[3] = "{\"gyro_x\":" + String(sensor.getGyroX(), 2) + ",\"gyro_y\":" + String(sensor.getGyroY(), 2) + ",\"gyro_z\":" + String(sensor.getGyroZ(), 2) + "}";
@@ -340,7 +297,7 @@ void telemetryTask() {
         }
     } else {
         // Chế độ Power Saving: Cảm biến tắt, chỉ truyền EPS và GPS qua LoRa
-        String epsPayload = "{\"battery_v\":" + String(lastBatteryV, 2) + ",\"pwr_save\":true}";
+        String epsPayload = "{\"battery_v\":" + String(eps.getBatteryVoltage(), 2) + ",\"pwr_save\":true}";
         scheduler.println("[TELEMETRY] EPS: " + epsPayload);
         if (scheduler.lock(PTIT_BUS_LORA, 200)) {
             com.sendMessage(epsPayload);
@@ -365,8 +322,6 @@ void setup() {
     eps.setBuckState(true);
 
     eps.init();
-    lastBatteryV = eps.getBatteryVoltage();
-    lastBatteryPct = eps.getBatteryPercentage();
     sensor.init();
     gps.init();
     camera.init();
