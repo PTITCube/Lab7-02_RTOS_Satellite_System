@@ -90,26 +90,48 @@ void processCommand(const String& cmdStr) {
                     delay(250);
                 }
                 return;
-            case 'b':
-                if (isPowerSaving) {
-                    if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("ERR: Storage disabled in power saving mode"); scheduler.unlock(PTIT_BUS_LORA); }
-                    return;
+            case 'b': { // Lưu và đọc lại điện áp & dung lượng pin từ thẻ nhớ SD (nhận nguồn từ OBC, luôn hoạt động)
+                scheduler.println("Saving battery data to SD card...");
+                if (scheduler.lock(PTIT_BUS_LORA, 200)) {
+                    com.sendMessage("Saving battery data to SD card...");
+                    scheduler.unlock(PTIT_BUS_LORA);
                 }
                 if (scheduler.lock(PTIT_BUS_SPI, 500)) {
                     storage.writeFile("/voltage.txt", "");
                     for (uint8_t i = 0; i < 5; i++) {
                         eps.update();
-                        storage.appendFile("/voltage.txt", ("Bus voltage: " + String(eps.getBatteryVoltage(), 2) + " V\r\n").c_str());
+                        float v = eps.getBatteryVoltage();
+                        float pct = eps.getBatteryPercentage();
+                        String line = "[" + String(i + 1) + "/5] Bat: " + String(v, 2) + "V, " + String(pct, 1) + "%";
+                        storage.appendFile("/voltage.txt", (line + "\r\n").c_str());
                         delay(200);
                     }
                     String data = storage.readFile("/voltage.txt");
                     scheduler.unlock(PTIT_BUS_SPI);
+                    scheduler.print(data);
+
                     if (scheduler.lock(PTIT_BUS_LORA, 500)) {
-                        com.sendMessage(data);
+                        com.sendMessage("Done saving. Reading from SD card:");
+                        delay(100);
+                        int startIdx = 0;
+                        while (startIdx < (int)data.length()) {
+                            int endIdx = data.indexOf('\n', startIdx);
+                            if (endIdx < 0) endIdx = data.length();
+                            String singleLine = data.substring(startIdx, endIdx);
+                            singleLine.trim();
+                            if (singleLine.length() > 0) {
+                                com.sendMessage(singleLine);
+                                delay(120);
+                            }
+                            startIdx = endIdx + 1;
+                        }
+                        com.sendMessage("Done reading from SD card.");
                         scheduler.unlock(PTIT_BUS_LORA);
                     }
+                    scheduler.println("Done reading from SD card.");
                 }
                 return;
+            }
             case 'c': {
                 if (isPowerSaving) {
                     if (scheduler.lock(PTIT_BUS_LORA, 200)) { com.sendMessage("ERR: Sensors disabled in power saving mode"); scheduler.unlock(PTIT_BUS_LORA); }
@@ -222,7 +244,7 @@ void telemetryTask() {
     if (!isPowerSaving && (vbat < VOLTAGE_LOW_THRES || pct < PERCENT_LOW_THRES)) {
         isPowerSaving = true;
         eps.setBuckState(false);
-        scheduler.println("Power saving mode ENABLED (Low battery). Sensors, camera and storage disabled.");
+        scheduler.println("Power saving mode ENABLED (Low battery). Sensors and camera disabled.");
         com.sendMessage("ALERT: Power saving mode ENABLED");
     } else if (isPowerSaving && vbat > VOLTAGE_HIGH_THRES && pct > PERCENT_HIGH_THRES) {
         isPowerSaving = false;
@@ -264,7 +286,7 @@ void telemetryTask() {
             delay(120);
         }
     } else {
-        // Chế độ Power Saving: Không ghi SD, cảm biến tắt, chỉ truyền EPS và GPS qua LoRa
+        // Chế độ Power Saving: Cảm biến tắt, chỉ truyền EPS và GPS qua LoRa
         String epsPayload = "{\"battery_v\":" + String(eps.getBatteryVoltage(), 2) + ",\"pwr_save\":true}";
         scheduler.println("[TELEMETRY] EPS: " + epsPayload);
         if (scheduler.lock(PTIT_BUS_LORA, 200)) {
