@@ -1,6 +1,6 @@
 #include "Storage.h"
 #include "../EPS/EPS.h"
-#include "../Scheduler/Scheduler.h"
+#include "../CDH/CDH.h"
 #include <SD.h>
 #include <SPI.h>
 
@@ -32,13 +32,13 @@ bool PTIT_Storage::isReady() { return sdReady; }
 void PTIT_Storage::logData(const char *data) {
   if (!sdReady)
     return;
-  bool locked = PTIT_Scheduler::lock(PTIT_BUS_SPI);
+  bool locked = PTIT_CDH::lock(PTIT_BUS_SPI);
   File file = SD.open("/datalog.txt", FILE_APPEND);
   if (file) {
     file.println(data);
     file.close();
   }
-  if (locked) PTIT_Scheduler::unlock(PTIT_BUS_SPI);
+  if (locked) PTIT_CDH::unlock(PTIT_BUS_SPI);
 }
 
 bool PTIT_Storage::writeFile(const char *path, const char *content) {

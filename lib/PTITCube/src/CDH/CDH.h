@@ -6,24 +6,35 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <esp_task_wdt.h>
 #include <type_traits>
 
 using PTIT_ConsoleSerial = std::remove_reference<decltype(Serial)>::type;
 
+// ===== Định danh Bus cho lock/unlock tài nguyên chia sẻ =====
+#define PTIT_BUS_I2C    0
+#define PTIT_BUS_SPI    1
+#define PTIT_BUS_SERIAL 2
+#define PTIT_BUS_UART2  2
+#define PTIT_BUS_LORA   3
+#define PTIT_NUM_BUSES  4
+
+#define PTIT_MAX_TASKS  8
+
 /**
  * @class PTIT_CDH
- * @brief Phân hệ Xử lý Dữ liệu và Lệnh điều khiển (Command and Data Handling).
+ * @brief Phân hệ Xử lý Dữ liệu, Lệnh điều khiển & Bộ lập lịch đa nhiệm (Command, Data Handling & Scheduler).
  * 
  * PTIT_CDH kế thừa từ Stream (và Print) để đóng gói toàn bộ các phương thức
- * giao tiếp dữ liệu nối tiếp của Serial (print, println, printf, read, write, available, v.v.),
- * giúp ẩn phần cứng Serial bên dưới và chuẩn hóa giao tiếp trong hệ thống PTITCube.
+ * giao tiếp dữ liệu nối tiếp của Serial, đồng thời tích hợp trực tiếp bộ lập lịch
+ * đa nhiệm FreeRTOS (Scheduler), quản lý Task, Mutex bảo vệ Bus và Watchdog Timer.
  */
 class PTIT_CDH : public Stream {
-private:
-    PTIT_ConsoleSerial& _serial;
-
 public:
+    /** Kiểu hàm task — hàm void không tham số cho RTOS scheduler. */
+    typedef void (*TaskFunction)();
+
     PTIT_CDH(PTIT_ConsoleSerial& serial = Serial);
 
     // Khởi tạo WiFi, MQTT và vòng lặp phân hệ CDH
@@ -51,6 +62,22 @@ public:
     using Print::write;
 
     // ==========================================
+    // FreeRTOS Multitasking Scheduler APIs
+    // ==========================================
+    void addTask(const char* name, TaskFunction fn, uint32_t intervalMs,
+                 uint8_t core = 1, uint8_t priority = 2, uint16_t stackSize = 4096);
+    void enableWatchdog(uint32_t timeoutSeconds = 30);
+    void start();
+
+    // ==========================================
+    // Shared Resource Bus Lock / Unlock (Mutex)
+    // ==========================================
+    static bool lock(uint8_t bus, uint32_t timeoutMs = 100);
+    static void unlock(uint8_t bus);
+    static void printSafe(const String& msg);
+    static void printlnSafe(const String& msg = "");
+
+    // ==========================================
     // Watchdog Timer (WDT) APIs
     // ==========================================
     bool wdtInit(uint32_t timeoutSec = 3, bool panic = true);
@@ -65,6 +92,43 @@ public:
     bool createTask(TaskFunction_t taskFn, const char* name, uint32_t stackSize = 2048, 
                     UBaseType_t priority = 1, BaseType_t core = 1, void* param = NULL);
     void delayMs(uint32_t ms);
+
+private:
+    PTIT_ConsoleSerial& _serial;
+
+    struct TaskInfo {
+        const char*  name;
+        TaskFunction fn;
+        uint32_t     intervalMs;
+        uint8_t      core;
+        uint8_t      priority;
+        uint16_t     stackSize;
+    };
+
+    static TaskInfo _tasks[PTIT_MAX_TASKS];
+    static uint8_t  _taskCount;
+    static bool     _wdtEnabled;
+    static uint32_t _wdtTimeout;
+    static bool     _wdtActive;
+    static SemaphoreHandle_t _busMutex[PTIT_NUM_BUSES];
+
+    static void taskWrapper(void* pvParameters);
+};
+
+// ============================================================================
+// PTIT_Scheduler: Lớp kế thừa để tương thích hoàn toàn mã nguồn cũ
+// ============================================================================
+class PTIT_Scheduler : public PTIT_CDH {
+public:
+    using PTIT_CDH::PTIT_CDH;
+
+    static void print(const String& msg) {
+        PTIT_CDH::printSafe(msg);
+    }
+
+    static void println(const String& msg = "") {
+        PTIT_CDH::printlnSafe(msg);
+    }
 };
 
 // ============================================================================

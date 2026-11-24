@@ -1,6 +1,6 @@
 #include "Sensor.h"
 #include "../EPS/EPS.h"
-#include "../Scheduler/Scheduler.h"
+#include "../CDH/CDH.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <math.h>
@@ -76,7 +76,7 @@ void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
 }
 
 void PTIT_Sensor::update() {
-    bool locked = PTIT_Scheduler::lock(PTIT_BUS_I2C);
+    bool locked = PTIT_CDH::lock(PTIT_BUS_I2C);
 
     Wire.setTimeOut(25);
 
@@ -156,7 +156,7 @@ void PTIT_Sensor::update() {
         }
     }
 
-    if (locked) PTIT_Scheduler::unlock(PTIT_BUS_I2C);
+    if (locked) PTIT_CDH::unlock(PTIT_BUS_I2C);
 }
 
 float PTIT_Sensor::getTemperature() { return t; }

@@ -1,6 +1,6 @@
 #include "COM.h"
 #include "../EPS/EPS.h"
-#include "../Scheduler/Scheduler.h"
+#include "../CDH/CDH.h"
 
 #ifndef LORA_AUX_PIN
 #define LORA_AUX_PIN 27
@@ -50,7 +50,7 @@ void PTIT_COM::init() {
 }
 
 String PTIT_COM::update() {
-    bool locked = PTIT_Scheduler::lock(PTIT_BUS_LORA);
+    bool locked = PTIT_CDH::lock(PTIT_BUS_LORA);
     SwitchMode(MODE_0_NORMAL);
     if (_serial->available() > 0) {
         String msg = "";
@@ -58,10 +58,10 @@ String PTIT_COM::update() {
             msg += (char)_serial->read();
             delay(3);
         }
-        if (locked) PTIT_Scheduler::unlock(PTIT_BUS_LORA);
+        if (locked) PTIT_CDH::unlock(PTIT_BUS_LORA);
         return msg;
     }
-    if (locked) PTIT_Scheduler::unlock(PTIT_BUS_LORA);
+    if (locked) PTIT_CDH::unlock(PTIT_BUS_LORA);
     return "";
 }
 
@@ -70,7 +70,7 @@ void PTIT_COM::sendPing() {
 }
 
 void PTIT_COM::sendMessage(String msg) {
-    bool locked = PTIT_Scheduler::lock(PTIT_BUS_LORA);
+    bool locked = PTIT_CDH::lock(PTIT_BUS_LORA);
     if (!msg.endsWith("\n")) {
         msg += "\n";
     }
@@ -97,7 +97,7 @@ void PTIT_COM::sendMessage(String msg) {
             delay(50);
         }
     }
-    if (locked) PTIT_Scheduler::unlock(PTIT_BUS_LORA);
+    if (locked) PTIT_CDH::unlock(PTIT_BUS_LORA);
 }
 
 bool PTIT_COM::setChannel(uint8_t channel) {
