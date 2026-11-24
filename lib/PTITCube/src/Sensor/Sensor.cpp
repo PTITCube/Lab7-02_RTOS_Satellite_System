@@ -12,8 +12,8 @@ bool PTIT_Sensor::initMPUDevice(uint8_t addr) {
     if (Wire.requestFrom((uint8_t)addr, (uint8_t)1) != 1) return false;
     uint8_t id = Wire.read();
     
-    // MPU6500 (0x70), MPU6050 (0x68), MPU9250 (0x71, 0x73)
-    if (id != 0x70 && id != 0x68 && id != 0x71 && id != 0x73) {
+    // MPU6500 (0x70, 0x71, 0x73)
+    if (id != 0x70 && id != 0x71 && id != 0x73) {
         return false;
     }
 
