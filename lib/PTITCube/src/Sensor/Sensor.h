@@ -2,7 +2,6 @@
 #define SENSOR_H
 
 #include <Adafruit_BMP280.h>
-#include <Adafruit_MPU6050.h>
 #include <Adafruit_QMC5883P.h>
 
 class PTIT_Sensor {
@@ -27,9 +26,9 @@ public:
 
 private:
     Adafruit_BMP280 bmp;
-    Adafruit_MPU6050 mpu;
     Adafruit_QMC5883P qmc;
 
+    uint8_t mpuAddress = 0x68;
     bool bmpReady = false;
     bool mpuReady = false;
     bool qmcReady = false;
@@ -38,6 +37,8 @@ private:
     float ax = 0, ay = 0, az = 0;
     float gx = 0, gy = 0, gz = 0;
     float mx = 0, my = 0, mz = 0;
+
+    bool initMPUDevice(uint8_t addr);
 };
 
 #endif

@@ -5,8 +5,48 @@
 #include <Wire.h>
 #include <math.h>
 
+bool PTIT_Sensor::initMPUDevice(uint8_t addr) {
+    Wire.beginTransmission(addr);
+    Wire.write(0x75); // WHO_AM_I
+    if (Wire.endTransmission(false) != 0) return false;
+    if (Wire.requestFrom((uint8_t)addr, (uint8_t)1) != 1) return false;
+    uint8_t id = Wire.read();
+    
+    // MPU6500 (0x70), MPU6050 (0x68), MPU9250 (0x71, 0x73)
+    if (id != 0x70 && id != 0x68 && id != 0x71 && id != 0x73) {
+        return false;
+    }
+
+    // Đánh thức cảm biến (Ghi 0x01 vào PWR_MGMT_1: chọn auto PLL clock)
+    Wire.beginTransmission(addr);
+    Wire.write(0x6B);
+    Wire.write(0x01);
+    if (Wire.endTransmission() != 0) return false;
+    delay(10);
+
+    // Cấu hình DLPF 42Hz
+    Wire.beginTransmission(addr);
+    Wire.write(0x1A);
+    Wire.write(0x03);
+    Wire.endTransmission();
+
+    // Cấu hình Gyro dải đo ±500 deg/s (0x08)
+    Wire.beginTransmission(addr);
+    Wire.write(0x1B);
+    Wire.write(0x08);
+    Wire.endTransmission();
+
+    // Cấu hình Accel dải đo ±8g (0x10)
+    Wire.beginTransmission(addr);
+    Wire.write(0x1C);
+    Wire.write(0x10);
+    Wire.endTransmission();
+
+    mpuAddress = addr;
+    return true;
+}
+
 void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
-    // Kích hoạt hạ áp nuôi cảm biến thông qua thư viện EPS
     PTIT_EPS::setBuckState(true);
 
     Wire.begin(21, 22);
@@ -17,20 +57,7 @@ void PTIT_Sensor::init(bool initBMP, bool initMPU, bool initQMC) {
     }
 
     if (initMPU) {
-        if (mpu.begin(0x68)) {
-            // Bắt buộc đánh thức cảm biến (Ghi 0 vào thanh ghi PWR_MGMT_1)
-            Wire.beginTransmission(0x68);
-            Wire.write(0x6B); 
-            Wire.write(0x00); 
-            Wire.endTransmission();
-
-            // Cấu hình dải đo
-            mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-            mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-            mpuReady = true;
-        } else {
-            mpuReady = false;
-        }
+        mpuReady = initMPUDevice(0x68) || initMPUDevice(0x69);
     }
 
     if (initQMC) {
@@ -62,18 +89,7 @@ void PTIT_Sensor::update() {
     }
 
     if (!mpuReady) {
-        Wire.beginTransmission(0x68);
-        if (Wire.endTransmission() == 0) {
-            if (mpu.begin(0x68)) {
-                Wire.beginTransmission(0x68);
-                Wire.write(0x6B); 
-                Wire.write(0x00); 
-                Wire.endTransmission();
-                mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-                mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-                mpuReady = true;
-            }
-        }
+        mpuReady = initMPUDevice(0x68) || initMPUDevice(0x69);
     }
 
     if (!qmcReady) {
@@ -103,14 +119,26 @@ void PTIT_Sensor::update() {
     }
     
     if (mpuReady) {
-        sensors_event_t a, g, temp;
-        if (mpu.getEvent(&a, &g, &temp)) {
-            ax = a.acceleration.x;
-            ay = a.acceleration.y;
-            az = a.acceleration.z;
-            gx = g.gyro.x;
-            gy = g.gyro.y;
-            gz = g.gyro.z;
+        Wire.beginTransmission(mpuAddress);
+        Wire.write(0x3B);
+        if (Wire.endTransmission(false) == 0 && Wire.requestFrom((uint8_t)mpuAddress, (uint8_t)14) == 14) {
+            int16_t raw_ax = (Wire.read() << 8) | Wire.read();
+            int16_t raw_ay = (Wire.read() << 8) | Wire.read();
+            int16_t raw_az = (Wire.read() << 8) | Wire.read();
+            Wire.read(); Wire.read(); // Bỏ qua temp nội bộ MPU (dùng BMP280 chính xác hơn)
+            int16_t raw_gx = (Wire.read() << 8) | Wire.read();
+            int16_t raw_gy = (Wire.read() << 8) | Wire.read();
+            int16_t raw_gz = (Wire.read() << 8) | Wire.read();
+
+            // ±8g range: 4096 LSB/g, gravity = 9.80665 m/s^2
+            ax = (float)raw_ax * (9.80665f / 4096.0f);
+            ay = (float)raw_ay * (9.80665f / 4096.0f);
+            az = (float)raw_az * (9.80665f / 4096.0f);
+
+            // ±500 dps range: 65.5 LSB/(deg/s), chuyển đổi sang rad/s
+            gx = (float)raw_gx * 0.00026646248f;
+            gy = (float)raw_gy * 0.00026646248f;
+            gz = (float)raw_gz * 0.00026646248f;
         } else {
             mpuReady = false;
         }
