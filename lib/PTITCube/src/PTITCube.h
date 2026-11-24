@@ -47,10 +47,13 @@
 #include "CDH/CDH.h"
 #include "COM/COM.h"
 #include "Sensor/Sensor.h"
-#include "GPS/GPS.h"
-#include "Camera/Camera.h"
+#include "MUX/MUX.h"
+
+// Tương thích ngược các header cũ
 #include "Storage/Storage.h"
 #include "Scheduler/Scheduler.h"
+#include "Camera/Camera.h"
+#include "GPS/GPS.h"
 
 class PTIT_Utils {
 public:
