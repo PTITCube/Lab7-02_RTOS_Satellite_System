@@ -16,13 +16,11 @@ static bool s_buckEnabled = false;
 static bool s_buckInitialized = false;
 
 bool PTIT_EPS::init() {
-    // Mặc định cấp dòng cho buck khi khởi tạo EPS (Mức 0: LOW)
     setBuckState(true);
 
     Wire.begin(21, 22);
     Wire.setTimeOut(25);
     
-    // Kiểm tra kết nối tới MAX17048
     Wire.beginTransmission(MAX17048_I2C_ADDR);
     if (Wire.endTransmission() == 0) {
         sensorReady = true;
@@ -36,54 +34,53 @@ bool PTIT_EPS::init() {
 
 void PTIT_EPS::update() {
     Wire.setTimeOut(25);
+    bool wasBuckOff = !getBuckState();
 
-    // Luôn detect linh kiện MAX17048 và cố gắng khởi tạo lại (không in log serial)
-    if (!sensorReady || lastVoltage <= 0.5f) {
-        Wire.beginTransmission(MAX17048_I2C_ADDR);
-        if (Wire.endTransmission() != 0) {
-            // Nếu không có ACK, có thể do mạch Buck đang ngắt khiến bus I2C mất áp
-            if (!getBuckState()) {
-                setBuckState(true);
-                delay(20);
-                Wire.begin(21, 22);
-            }
-        }
-
-        Wire.beginTransmission(MAX17048_I2C_ADDR);
-        if (Wire.endTransmission() == 0) {
-            sensorReady = true;
-        } else {
-            sensorReady = false;
-            return;
-        }
+    // Nếu Buck đang tắt (Power Saving), tạm thời kích hoạt Buck để cấp áp bus I2C đọc MAX17048
+    if (wasBuckOff) {
+        setBuckState(true);
+        delay(30);
+        Wire.begin(21, 22);
     }
 
-    lastVoltage = getBatteryVoltage();
-    lastPercent = getBatteryPercent();
-    lastRate = getChargeRate();
-    if (lastVoltage <= 0.5f) {
+    Wire.beginTransmission(MAX17048_I2C_ADDR);
+    if (Wire.endTransmission() == 0) {
+        sensorReady = true;
+        uint16_t rawV = readRegister16(MAX17048_REG_VCELL);
+        if (rawV > 0) {
+            lastVoltage = (float)rawV * 0.000078125f;
+        }
+        uint16_t rawS = readRegister16(MAX17048_REG_SOC);
+        if (rawS > 0) {
+            float percent = (float)rawS / 256.0f;
+            if (percent > 100.0f) percent = 100.0f;
+            if (percent < 0.0f) percent = 0.0f;
+            lastPercent = percent;
+        }
+        int16_t rawC = (int16_t)readRegister16(MAX17048_REG_CRATE);
+        lastRate = (float)rawC * 0.208f;
+    } else {
         sensorReady = false;
+    }
+
+    // Nếu trước đó Buck đang ngắt để tiết kiệm năng lượng, trả về trạng thái ngắt ban đầu
+    if (wasBuckOff) {
+        setBuckState(false);
     }
 }
 
 float PTIT_EPS::getBatteryVoltage() {
-    if (!sensorReady) return 0.0f;
-    uint16_t raw = readRegister16(MAX17048_REG_VCELL);
-    // VCELL resolution: 78.125 uV / LSB = 0.000078125 V
-    float voltage = (float)raw * 0.000078125f;
-    lastVoltage = voltage;
-    return voltage;
+    if (lastVoltage <= 0.5f) {
+        update();
+    }
+    return lastVoltage;
 }
 
 float PTIT_EPS::getBatteryPercent() {
-    if (!sensorReady) return 0.0f;
-    uint16_t raw = readRegister16(MAX17048_REG_SOC);
-    // SOC resolution: 1/256 %
-    float percent = (float)raw / 256.0f;
-    if (percent > 100.0f) percent = 100.0f;
-    if (percent < 0.0f) percent = 0.0f;
-    lastPercent = percent;
-    return percent;
+    if (lastPercent <= 0.0f && lastVoltage <= 0.5f) {
+        update();
+    }
+    return lastPercent;
 }
 
 float PTIT_EPS::getBatteryPercentage() {
@@ -91,12 +88,7 @@ float PTIT_EPS::getBatteryPercentage() {
 }
 
 float PTIT_EPS::getChargeRate() {
-    if (!sensorReady) return 0.0f;
-    int16_t raw = (int16_t)readRegister16(MAX17048_REG_CRATE);
-    // CRATE resolution: 0.208 %/hr (giá trị âm: xả pin, giá trị dương: đang sạc)
-    float rate = (float)raw * 0.208f;
-    lastRate = rate;
-    return rate;
+    return lastRate;
 }
 
 bool PTIT_EPS::isConnected() const {
