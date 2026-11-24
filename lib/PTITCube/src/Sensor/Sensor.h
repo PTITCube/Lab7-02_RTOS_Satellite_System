@@ -30,6 +30,10 @@ private:
     Adafruit_MPU6050 mpu;
     Adafruit_QMC5883P qmc;
 
+    bool bmpReady = false;
+    bool mpuReady = false;
+    bool qmcReady = false;
+
     float t = 0, p = 0;
     float ax = 0, ay = 0, az = 0;
     float gx = 0, gy = 0, gz = 0;
@@ -37,4 +41,3 @@ private:
 };
 
 #endif
-

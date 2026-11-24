@@ -22,8 +22,6 @@ bool isPowerSaving = false;
 bool isTelemetryPaused = false;
 unsigned long lastCmdTime = 0;
 
-void maintain_i2c();
-
 // Task 1: Cảm biến I2C (Core 1 - Vô hiệu hóa khi ở Power Saving)
 void sensorTask() {
     if (isTelemetryPaused || isPowerSaving) return;
@@ -91,7 +89,6 @@ void processCommand(const String& cmdStr) {
                 }
                 return;
             case 'b': { // Lưu và đọc lại điện áp & dung lượng pin từ thẻ nhớ SD (nhận nguồn từ OBC, luôn hoạt động)
-                maintain_i2c();
                 scheduler.println("Saving battery data to SD card...");
                 if (scheduler.lock(PTIT_BUS_LORA, 200)) {
                     com.sendMessage("Saving battery data to SD card...");
@@ -250,62 +247,11 @@ void comTask() {
 }
 
 // Task 4: Viễn trắc HK theo từng chunk (Core 0)
-void maintain_i2c() {
-    if (!scheduler.lock(PTIT_BUS_I2C, 200)) return;
-
-    Wire.begin(21, 22);
-    Wire.setTimeOut(25);
-
-    // Luôn detect MAX17048 (EPS @ 0x36) và cố gắng khởi tạo lại (không hiển thị log serial)
-    Wire.beginTransmission(0x36);
-    if (Wire.endTransmission() != 0) {
-        eps.setBuckState(true);
-        delay(20);
-        Wire.begin(21, 22);
-    }
-
-    Wire.beginTransmission(0x36);
-    if (Wire.endTransmission() == 0) {
-        eps.init();
-    }
-
-    // Luôn detect các component cảm biến trên I2C và cố gắng khởi tạo lại khi không ở Power Saving
-    if (!isPowerSaving) {
-        bool bmpFound = false;
-        Wire.beginTransmission(0x76);
-        if (Wire.endTransmission() == 0) bmpFound = true;
-        else {
-            Wire.beginTransmission(0x77);
-            if (Wire.endTransmission() == 0) bmpFound = true;
-        }
-
-        bool mpuFound = false;
-        Wire.beginTransmission(0x68);
-        if (Wire.endTransmission() == 0) mpuFound = true;
-
-        bool qmcFound = false;
-        Wire.beginTransmission(0x2C);
-        if (Wire.endTransmission() == 0) qmcFound = true;
-        else {
-            Wire.beginTransmission(0x0D);
-            if (Wire.endTransmission() == 0) qmcFound = true;
-        }
-
-        if (bmpFound || mpuFound || qmcFound) {
-            sensor.init(bmpFound, mpuFound, qmcFound);
-        }
-    }
-
-    scheduler.unlock(PTIT_BUS_I2C);
-}
-
 void telemetryTask() {
     if (isTelemetryPaused) return;
 
     // Nếu vừa có lệnh từ mặt đất trong vòng 3 giây trước, hoãn telemetry để nhường kênh vô tuyến
     if (millis() - lastCmdTime < 3000) return;
-
-    maintain_i2c();
 
     if (scheduler.lock(PTIT_BUS_I2C, 200)) {
         eps.update();

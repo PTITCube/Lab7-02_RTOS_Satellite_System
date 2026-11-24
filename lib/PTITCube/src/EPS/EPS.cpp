@@ -19,7 +19,8 @@ bool PTIT_EPS::init() {
     // Mặc định cấp dòng cho buck khi khởi tạo EPS (Mức 0: LOW)
     setBuckState(true);
 
-    Wire.begin();
+    Wire.begin(21, 22);
+    Wire.setTimeOut(25);
     
     // Kiểm tra kết nối tới MAX17048
     Wire.beginTransmission(MAX17048_I2C_ADDR);
@@ -34,17 +35,35 @@ bool PTIT_EPS::init() {
 }
 
 void PTIT_EPS::update() {
-    if (!sensorReady) {
+    Wire.setTimeOut(25);
+
+    // Luôn detect linh kiện MAX17048 và cố gắng khởi tạo lại (không in log serial)
+    if (!sensorReady || lastVoltage <= 0.5f) {
+        Wire.beginTransmission(MAX17048_I2C_ADDR);
+        if (Wire.endTransmission() != 0) {
+            // Nếu không có ACK, có thể do mạch Buck đang ngắt khiến bus I2C mất áp
+            if (!getBuckState()) {
+                setBuckState(true);
+                delay(20);
+                Wire.begin(21, 22);
+            }
+        }
+
         Wire.beginTransmission(MAX17048_I2C_ADDR);
         if (Wire.endTransmission() == 0) {
             sensorReady = true;
         } else {
+            sensorReady = false;
             return;
         }
     }
+
     lastVoltage = getBatteryVoltage();
     lastPercent = getBatteryPercent();
     lastRate = getChargeRate();
+    if (lastVoltage <= 0.5f) {
+        sensorReady = false;
+    }
 }
 
 float PTIT_EPS::getBatteryVoltage() {
@@ -102,7 +121,10 @@ bool PTIT_EPS::getBuckState() {
 uint16_t PTIT_EPS::readRegister16(uint8_t reg) {
     Wire.beginTransmission(MAX17048_I2C_ADDR);
     Wire.write(reg);
-    Wire.endTransmission(false);
+    if (Wire.endTransmission(false) != 0) {
+        sensorReady = false;
+        return 0;
+    }
     
     Wire.requestFrom((uint8_t)MAX17048_I2C_ADDR, (uint8_t)2);
     if (Wire.available() >= 2) {
@@ -110,6 +132,7 @@ uint16_t PTIT_EPS::readRegister16(uint8_t reg) {
         uint8_t lsb = Wire.read();
         return ((uint16_t)msb << 8) | lsb;
     }
+    sensorReady = false;
     return 0;
 }
 
