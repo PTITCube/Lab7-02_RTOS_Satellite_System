@@ -1,5 +1,5 @@
 /**
- * LAB 7-02: HỆ THỐNG PHẦN MỀM BAY ĐA NHIỆM FREERTOS (HEPTA-SAT PATTERN)
+ * LAB 7-02: HỆ THỐNG PHẦN MỀM BAY ĐA NHIỆM FREERTOS (PTITCUBE CUBESAT ARCHITECTURE)
  * Tích hợp: C&DH, EPS, Sensor, GPS, Camera, Storage, COM (FreeRTOS Multitasking).
  */
 #include <Arduino.h>
@@ -68,11 +68,11 @@ bool capturePhotoToSD() {
     return ok;
 }
 
-// Xử lý lệnh từ trạm mặt đất (HEPTA-SAT 'a'..'f' + LMS System Commands)
+// Xử lý lệnh từ trạm mặt đất (Lệnh 'a'..'f' + LMS System Commands)
 void processCommand(const String& cmdStr) {
     if (cmdStr.length() == 0) return;
-    lastCmdTime = millis(); // Cập nhật thời điểm nhận lệnh để hoãn Telemetry
-    delay(80); // Transceiver RX-switching guard time
+    lastCmdTime = millis();
+    delay(100); // Độ trễ ổn định RF thu nhận uplink và chuẩn bị phản hồi
 
     char c = cmdStr.charAt(0);
     scheduler.println("Received command: " + cmdStr);
