@@ -1,3 +1,3 @@
 #include "Scheduler.h"
 
-// Implementation of Scheduler has been merged directly into CDH.cpp
+// Implementation of Scheduler is located at CDH/Scheduler.cpp
